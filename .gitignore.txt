@@ -1,0 +1,61 @@
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ----------------------
+# Environment variables
+# ----------------------
+.env
+.env.*
+
+# ----------------------
+# Logs & temp files
+# ----------------------
+*.log
+logs/
+tmp/
+temp/
+
+# ----------------------
+# Airflow
+# ----------------------
+airflow.db
+airflow.cfg
+logs/
+dags/__pycache__/
+
+# ----------------------
+# Data files (optional - be careful here)
+# ----------------------
+*.csv
+*.parquet
+*.json
+
+# ----------------------
+# Jupyter
+# ----------------------
+.ipynb_checkpoints/
+
+# ----------------------
+# OS / Editor
+# ----------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ----------------------
+# Build / dist
+# ----------------------
+dist/
+build/
+*.egg-info/

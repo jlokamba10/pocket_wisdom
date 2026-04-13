@@ -1,0 +1,206 @@
+version: "3.9"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    ports:
+      - "1883:1883"
+    volumes:
+      - ${PWD}/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.5
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: pocketwisdom
+      DOCKER_INFLUXDB_INIT_PASSWORD: pocketwisdom
+      DOCKER_INFLUXDB_INIT_ORG: pocketwisdom
+      DOCKER_INFLUXDB_INIT_BUCKET: tenant_demo_raw
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: pocketwisdom-token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  loki:
+    image: grafana/loki:3.1.0
+    command: -config.file=/etc/loki/loki.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    command: -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml
+      - logs:/var/log/pocketwisdom
+
+  ingestion:
+    build:
+      context: ../..
+      dockerfile: services/ingestion/Dockerfile
+    environment:
+      PW_MQTT_HOST: mosquitto
+      PW_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      PW_INFLUX_URL: http://influxdb:8086
+      PW_INFLUX_TOKEN: pocketwisdom-token
+      PW_INFLUX_ORG: pocketwisdom
+      PW_LOG_FILE: /var/log/pocketwisdom/ingestion.log
+    volumes:
+      - logs:/var/log/pocketwisdom
+    depends_on:
+      - mosquitto
+      - redpanda
+      - influxdb
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: services/admin/Dockerfile
+    environment:
+      PW_DATABASE_URL: sqlite:////data/admin.db
+      PW_LOG_FILE: /var/log/pocketwisdom/admin.log
+    volumes:
+      - admin-data:/data
+      - logs:/var/log/pocketwisdom
+    ports:
+      - "8002:8002"
+
+  alerts:
+    build:
+      context: ../..
+      dockerfile: services/alerts/Dockerfile
+    environment:
+      PW_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      PW_ADMIN_API_URL: http://admin:8002
+      PW_LOG_FILE: /var/log/pocketwisdom/alerts.log
+    volumes:
+      - logs:/var/log/pocketwisdom
+    depends_on:
+      - redpanda
+      - admin
+
+  rollups:
+    build:
+      context: ../..
+      dockerfile: jobs/rollups/Dockerfile
+    environment:
+      PW_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      PW_INFLUX_URL: http://influxdb:8086
+      PW_INFLUX_TOKEN: pocketwisdom-token
+      PW_INFLUX_ORG: pocketwisdom
+      PW_S3_ENDPOINT_URL: http://minio:9000
+      PW_S3_ACCESS_KEY: minioadmin
+      PW_S3_SECRET_KEY: minioadmin
+      PW_LAKE_BUCKET_MODE: bucket
+      PW_LOG_FILE: /var/log/pocketwisdom/rollups.log
+    volumes:
+      - logs:/var/log/pocketwisdom
+    depends_on:
+      - redpanda
+      - influxdb
+      - minio
+
+  lake-writer:
+    build:
+      context: ../..
+      dockerfile: jobs/rollups/Dockerfile
+    command: ["python", "/app/jobs/lake_writer.py"]
+    environment:
+      PW_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      PW_S3_ENDPOINT_URL: http://minio:9000
+      PW_S3_ACCESS_KEY: minioadmin
+      PW_S3_SECRET_KEY: minioadmin
+      PW_LAKE_BUCKET_MODE: bucket
+      PW_LOG_FILE: /var/log/pocketwisdom/lake_writer.log
+    volumes:
+      - logs:/var/log/pocketwisdom
+    depends_on:
+      - redpanda
+      - minio
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+    environment:
+      VITE_GRAFANA_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - grafana
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    depends_on:
+      - redpanda
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+
+volumes:
+  influxdb-data:
+  minio-data:
+  grafana-data:
+  loki-data:
+  mosquitto-data:
+  admin-data:
+  logs:

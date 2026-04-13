@@ -1,0 +1,13 @@
+{
+  "tenant_id": "demo",
+  "client_id": "client-001",
+  "machine_id": "machine-001",
+  "sensor_id": "sensor-001",
+  "ts": "2026-04-11T20:00:00Z",
+  "metrics": {
+    "temperature": 72.4,
+    "vibration": 0.12,
+    "pressure": 101.3
+  },
+  "status": "ok"
+}
