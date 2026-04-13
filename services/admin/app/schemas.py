@@ -1,67 +1,79 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class ClientCreate(BaseModel):
-    tenant_id: str
-    name: str
+class TenantSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class ClientOut(BaseModel):
     id: int
-    tenant_id: str
     name: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    code: str
+    status: str
 
 
-class MachineCreate(BaseModel):
-    tenant_id: str
-    client_id: int
-    name: str
-    location: Optional[str] = None
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class MachineOut(BaseModel):
     id: int
-    tenant_id: str
-    client_id: int
-    name: str
-    location: Optional[str]
+    tenant_id: Optional[int]
+    email: str
+    full_name: str
+    role: str
+    status: str
+    supervisor_user_id: Optional[int]
     created_at: datetime
+    updated_at: datetime
+    tenant: Optional[TenantSummary] = None
 
-    class Config:
-        from_attributes = True
+
+class UserUpdate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=128)
 
 
-class AlertRuleCreate(BaseModel):
-    tenant_id: str
-    name: str
-    rule_type: str
-    metric: str
-    threshold: Optional[str] = None
-    window_seconds: Optional[int] = None
-    webhook_url: Optional[str] = None
-    email: Optional[str] = None
-    enabled: bool = True
+class LoginRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("Invalid email address")
+        return normalized
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserOut
+
+
+class MessageOut(BaseModel):
+    status: str
+    message: str
 
 
 class AlertRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    tenant_id: str
-    name: str
-    rule_type: str
-    metric: str
-    threshold: Optional[str]
-    window_seconds: Optional[int]
+    tenant_id: int
+    equipment_id: int
+    sensor_id: Optional[int]
+    severity: str
+    metric_name: str
+    operator: str
+    threshold_value: float
+    time_window_minutes: Optional[int]
     webhook_url: Optional[str]
     email: Optional[str]
-    enabled: bool
-    created_at: datetime
-
-    class Config:
-        from_attributes = True

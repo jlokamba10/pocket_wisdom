@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     environment: str = "local"
     log_level: str = "INFO"
 
+    jwt_secret_key: str = "change-me-local"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_minutes: int = 60
+    cors_origins: str = "http://localhost:5173"
+    internal_api_token: str = "pocketwisdom-internal-token"
+
     mqtt_host: str = "mosquitto"
     mqtt_port: int = 1883
     mqtt_topic: str = "tenants/+/clients/+/machines/+/sensors/+"

@@ -26,16 +26,15 @@ class AlertRule:
     def __init__(self, payload: dict[str, Any]) -> None:
         self.id = payload["id"]
         self.tenant_id = payload["tenant_id"]
-        self.name = payload["name"]
-        self.rule_type = payload["rule_type"]
-        self.metric = payload["metric"]
-        self.threshold = payload.get("threshold")
-        self.window_seconds = payload.get("window_seconds") or 0
+        self.metric_name = payload["metric_name"]
+        self.operator = payload["operator"]
+        self.threshold_value = payload["threshold_value"]
+        self.time_window_minutes = payload.get("time_window_minutes") or 0
         self.webhook_url = payload.get("webhook_url")
         self.email = payload.get("email")
 
     def matches(self, reading: dict) -> bool:
-        return reading.get("tenant_id") == self.tenant_id and self.metric in reading.get("metrics", {})
+        return reading.get("tenant_id") == self.tenant_id and self.metric_name in reading.get("metrics", {})
 
 
 class AlertEngine:
@@ -49,7 +48,10 @@ class AlertEngine:
     async def refresh_rules(self) -> None:
         while True:
             try:
-                response = await self.client.get(f"{settings.admin_api_url}/alerts")
+                response = await self.client.get(
+                    f"{settings.admin_api_url}/alerts",
+                    headers={"X-Internal-Token": settings.internal_api_token},
+                )
                 response.raise_for_status()
                 self.rules = [AlertRule(item) for item in response.json()]
                 metrics.active_rules.labels(settings.service_name).set(len(self.rules))
@@ -62,49 +64,45 @@ class AlertEngine:
         for rule in self.rules:
             if not rule.matches(reading):
                 continue
-            metric_value = reading["metrics"].get(rule.metric)
+            metric_value = reading["metrics"].get(rule.metric_name)
             if metric_value is None:
                 continue
-            if rule.rule_type == "threshold":
-                await self.evaluate_threshold(rule, reading, metric_value)
-            elif rule.rule_type == "window":
+            if rule.time_window_minutes:
                 await self.evaluate_window(rule, reading, metric_value)
+            else:
+                await self.evaluate_threshold(rule, reading, metric_value)
 
     async def evaluate_threshold(self, rule: AlertRule, reading: dict, value: float) -> None:
-        if not rule.threshold:
-            return
-        if self._compare(value, rule.threshold):
+        if self._compare(value, rule.operator, rule.threshold_value):
             await self.trigger(rule, reading, value)
 
     async def evaluate_window(self, rule: AlertRule, reading: dict, value: float) -> None:
-        if not rule.threshold or not rule.window_seconds:
-            return
         key = f"{rule.id}:{reading.get('sensor_id')}"
         now = datetime.utcnow()
         window = self.window_cache[key]
         window.append((now, value))
-        cutoff = now - timedelta(seconds=rule.window_seconds)
+        cutoff = now - timedelta(minutes=rule.time_window_minutes)
         while window and window[0][0] < cutoff:
             window.popleft()
         if not window:
             return
         avg = sum(item[1] for item in window) / len(window)
-        if self._compare(avg, rule.threshold):
+        if self._compare(avg, rule.operator, rule.threshold_value):
             await self.trigger(rule, reading, avg)
 
-    def _compare(self, value: float, threshold_expr: str) -> bool:
-        expr = threshold_expr.strip()
-        if expr.startswith(">="):
-            return value >= float(expr[2:])
-        if expr.startswith("<="):
-            return value <= float(expr[2:])
-        if expr.startswith(">"):
-            return value > float(expr[1:])
-        if expr.startswith("<"):
-            return value < float(expr[1:])
-        if expr.startswith("="):
-            return value == float(expr[1:])
-        return value > float(expr)
+    def _compare(self, value: float, operator: str, threshold: float) -> bool:
+        op = operator.strip()
+        if op == ">=":
+            return value >= threshold
+        if op == "<=":
+            return value <= threshold
+        if op == ">":
+            return value > threshold
+        if op == "<":
+            return value < threshold
+        if op in ("=", "=="):
+            return value == threshold
+        return value > threshold
 
     async def trigger(self, rule: AlertRule, reading: dict, value: float) -> None:
         dedupe_key = f"{rule.id}:{reading.get('sensor_id')}"
@@ -115,10 +113,9 @@ class AlertEngine:
         self.last_triggered[dedupe_key] = now
         payload = {
             "rule_id": rule.id,
-            "rule_name": rule.name,
             "tenant_id": rule.tenant_id,
             "sensor_id": reading.get("sensor_id"),
-            "metric": rule.metric,
+            "metric": rule.metric_name,
             "value": value,
             "timestamp": now.isoformat(),
         }

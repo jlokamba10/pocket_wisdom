@@ -79,8 +79,16 @@ Services:
 - InfluxDB: `localhost:8086`
 - MinIO: `localhost:9000`
 - Grafana: `localhost:3000`
+- PostgreSQL: `localhost:5432`
 - Admin API: `localhost:8002`
 - React UI: `localhost:5173`
+
+Run migrations + seed data (Docker):
+
+```bash
+docker compose exec admin alembic -c /app/alembic.ini upgrade head
+docker compose exec admin python -m app.seed
+```
 
 ## Ingestion Service
 
@@ -111,10 +119,46 @@ Services:
 
 ## Admin API
 
-- `POST /clients`
-- `POST /machines`
-- `POST /alerts`
+- `POST /auth/login`
+- `GET /auth/me`
+- `POST /auth/change-password`
+- `GET /users/me`
+- `PATCH /users/me`
+- `GET /alerts` (internal service token)
 - `GET /metrics`
+- `GET /health`
+
+## Authentication + RBAC
+
+- JWT bearer authentication with bcrypt password hashing.
+- Role-based access control enforced via centralized dependencies.
+- Internal service-to-service access uses `PW_INTERNAL_API_TOKEN` (sent as `X-Internal-Token`).
+
+## Database, Migrations, Seeding
+
+Local (without Docker) example:
+
+```bash
+cd C:\Users\jylok\source\repos\pocket_wisdom\services\admin
+
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+
+set PW_DATABASE_URL=postgresql+psycopg://pw_admin:pw_admin@localhost:5432/pocketwisdom
+set PYTHONPATH=C:\Users\jylok\source\repos\pocket_wisdom\shared\python
+
+alembic -c alembic.ini upgrade head
+python -m app.seed
+```
+
+Seeded demo users (all use `Admin123!`):
+
+- SYSTEM_ADMIN: `sysadmin@pocketwisdom.local`
+- CLIENT_ADMIN: `clientadmin@demo.local`
+- SUPERVISOR: `supervisor@demo.local`
+- ENGINEER: `engineer@demo.local`
+- TECHNICIAN: `technician@demo.local`
 
 ## Observability
 
@@ -177,6 +221,10 @@ Recommended migration flow:
 - `PW_INFLUX_URL`, `PW_INFLUX_TOKEN`, `PW_INFLUX_ORG`
 - `PW_S3_ENDPOINT_URL`, `PW_S3_ACCESS_KEY`, `PW_S3_SECRET_KEY`
 - `PW_LAKE_BUCKET_MODE`, `PW_LAKE_BUCKET_PREFIX`
+- `PW_DATABASE_URL`
+- `PW_JWT_SECRET_KEY`, `PW_JWT_ACCESS_TOKEN_MINUTES`
+- `PW_INTERNAL_API_TOKEN`
+- `PW_CORS_ORIGINS`
 
 ## Notes
 

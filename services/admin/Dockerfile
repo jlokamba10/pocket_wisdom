@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY shared/python /app/shared/python
 COPY services/admin/app /app/app
+COPY services/admin/alembic /app/alembic
+COPY services/admin/alembic.ini /app/alembic.ini
 
 ENV PYTHONPATH=/app/shared/python
 

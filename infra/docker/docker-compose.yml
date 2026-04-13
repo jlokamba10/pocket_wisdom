@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mosquitto:
     image: eclipse-mosquitto:2.0
@@ -110,18 +108,34 @@ services:
       - redpanda
       - influxdb
 
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pw_admin
+      POSTGRES_PASSWORD: pw_admin
+      POSTGRES_DB: pocketwisdom
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   admin:
     build:
       context: ../..
       dockerfile: services/admin/Dockerfile
     environment:
-      PW_DATABASE_URL: sqlite:////data/admin.db
+      PW_DATABASE_URL: postgresql+psycopg://pw_admin:pw_admin@postgres:5432/pocketwisdom
+      PW_JWT_SECRET_KEY: dev-change-me
+      PW_INTERNAL_API_TOKEN: pocketwisdom-internal-token
+      PW_CORS_ORIGINS: http://localhost:5173,http://frontend:5173
       PW_LOG_FILE: /var/log/pocketwisdom/admin.log
     volumes:
       - admin-data:/data
       - logs:/var/log/pocketwisdom
     ports:
       - "8002:8002"
+    depends_on:
+      - postgres
 
   alerts:
     build:
@@ -130,6 +144,7 @@ services:
     environment:
       PW_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       PW_ADMIN_API_URL: http://admin:8002
+      PW_INTERNAL_API_TOKEN: pocketwisdom-internal-token
       PW_LOG_FILE: /var/log/pocketwisdom/alerts.log
     volumes:
       - logs:/var/log/pocketwisdom
@@ -182,6 +197,7 @@ services:
       dockerfile: frontend/Dockerfile
     environment:
       VITE_GRAFANA_URL: http://localhost:3000
+      VITE_API_URL: http://localhost:8002
     ports:
       - "5173:5173"
     depends_on:
@@ -203,4 +219,5 @@ volumes:
   loki-data:
   mosquitto-data:
   admin-data:
+  postgres-data:
   logs:
