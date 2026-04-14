@@ -1,17 +1,34 @@
+﻿import { NavLink, Outlet } from "react-router-dom";
+
+const navItems = [
+  { label: "Overview", to: "/app/system/overview" },
+  { label: "Clients", to: "/app/system/clients" },
+  { label: "Users", to: "/app/system/users" },
+  { label: "Dashboard Templates", to: "/app/system/dashboard-templates" },
+  { label: "Audit Log", to: "/app/system/audit" },
+];
+
 export default function SystemConsole() {
   return (
-    <section className="page">
-      <div className="page-header">
-        <h1>System Console</h1>
-        <p>
-          Platform-level administration modules will appear here in the next
-          phase.
-        </p>
+    <div className="console-layout">
+      <div className="console-header">
+        <div>
+          <h1>System Administration</h1>
+          <p>Monitor platform health, tenants, and global access controls.</p>
+        </div>
       </div>
-      <div className="card">
-        <h3>Coming soon</h3>
-        <p>Tenant provisioning, global roles, and platform settings.</p>
+      <div className="subnav">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `subnav-link${isActive ? " active" : ""}`}
+          >
+            {item.label}
+          </NavLink>
+        ))}
       </div>
-    </section>
+      <Outlet />
+    </div>
   );
 }

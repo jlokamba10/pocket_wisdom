@@ -1,9 +1,18 @@
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../state/auth";
 
 export default function AppHome() {
   const { user } = useAuth();
   if (!user) {
     return null;
+  }
+
+  if (user.role === "SYSTEM_ADMIN") {
+    return <Navigate to="/app/system/overview" replace />;
+  }
+
+  if (user.role === "CLIENT_ADMIN") {
+    return <Navigate to="/app/client/overview" replace />;
   }
 
   return (

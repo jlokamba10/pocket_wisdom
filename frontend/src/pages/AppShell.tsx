@@ -9,8 +9,8 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "System Console", to: "/app/system", roles: ["SYSTEM_ADMIN"] },
-  { label: "Client Console", to: "/app/client", roles: ["CLIENT_ADMIN"] },
+  { label: "System Console", to: "/app/system/overview", roles: ["SYSTEM_ADMIN"] },
+  { label: "Client Console", to: "/app/client/overview", roles: ["CLIENT_ADMIN"] },
   {
     label: "Operations Console",
     to: "/app/ops",
@@ -25,17 +25,17 @@ const navItems: NavItem[] = [
 
 const placeholderItems: NavItem[] = [
   {
-    label: "Dashboards (phase 2)",
+    label: "Work Orders (phase 3)",
     roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR", "ENGINEER", "TECHNICIAN"],
     disabled: true,
   },
   {
-    label: "Alerts (phase 2)",
+    label: "Reliability Playbooks (phase 3)",
     roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR", "ENGINEER", "TECHNICIAN"],
     disabled: true,
   },
   {
-    label: "Asset Management (phase 2)",
+    label: "Asset Strategy (phase 3)",
     roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR"],
     disabled: true,
   },

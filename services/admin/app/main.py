@@ -11,7 +11,7 @@ from pocketwisdom.logging import configure_logging
 
 from .deps import get_db
 from .models import AlertRule, Equipment, Sensor, Tenant, User
-from .routers import alerts, auth, users
+from .routers import alerts, auth, client_admin, system_admin, users
 
 settings = Settings(service_name="admin")
 configure_logging(settings.log_level)
@@ -31,6 +31,9 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(alerts.router)
+app.include_router(system_admin.router)
+app.include_router(client_admin.router)
+app.include_router(client_admin.summary_router)
 
 
 @app.on_event("startup")

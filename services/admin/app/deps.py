@@ -10,7 +10,7 @@ from pocketwisdom.config import Settings
 
 from .auth import decode_token
 from .database import SessionLocal
-from .models import User, UserStatus
+from .models import User, UserRole, UserStatus
 
 settings = Settings(service_name="admin")
 auth_scheme = HTTPBearer(auto_error=False)
@@ -57,6 +57,18 @@ def require_roles(*roles: str):
         return user
 
     return _guard
+
+
+def require_system_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != UserRole.SYSTEM_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System admin access required")
+    return user
+
+
+def require_client_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {UserRole.CLIENT_ADMIN.value, UserRole.SYSTEM_ADMIN.value}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Client admin access required")
+    return user
 
 
 def require_internal_token(x_internal_token: str | None = Header(None)) -> None:
