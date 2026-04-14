@@ -90,6 +90,9 @@ docker compose exec admin alembic -c /app/alembic.ini upgrade head
 docker compose exec admin python -m app.seed
 ```
 
+Grafana dashboards are provisioned from `C:\Users\jylok\source\repos\pocket_wisdom\infra\docker\grafana\provisioning\dashboards`.
+The UI embeds Grafana dashboards using `VITE_GRAFANA_URL` (default `http://localhost:3000`).
+
 ## Ingestion Service
 
 - Subscribes to `tenants/+/clients/+/machines/+/sensors/+`
@@ -124,9 +127,12 @@ docker compose exec admin python -m app.seed
 - `POST /auth/change-password`
 - `GET /users/me`
 - `PATCH /users/me`
-- `GET /alerts` (internal service token)
+- `GET /internal/alert-rules` (internal service token)
 - `GET /summary/system-admin`
 - `GET /summary/client-admin`
+- `GET /summary/supervisor`
+- `GET /summary/engineer`
+- `GET /summary/technician`
 - `GET /clients`
 - `POST /clients`
 - `GET /clients/:id`
@@ -143,6 +149,7 @@ docker compose exec admin python -m app.seed
 - `GET /dashboard-templates`
 - `POST /dashboard-templates`
 - `PUT /dashboard-templates/:id`
+- `GET /system/dashboard-assignments`
 - `GET /audit`
 - `GET /client/users`
 - `POST /client/users`
@@ -166,6 +173,23 @@ docker compose exec admin python -m app.seed
 - `POST /client/sensors/:id/inactivate`
 - `GET /client/alerts`
 - `GET /client/dashboards`
+- `GET /equipment`
+- `POST /equipment`
+- `GET /equipment/:id`
+- `PUT /equipment/:id`
+- `GET /sensors`
+- `POST /sensors`
+- `GET /sensors/:id`
+- `PUT /sensors/:id`
+- `GET /alert-rules`
+- `POST /alert-rules`
+- `PUT /alert-rules/:id`
+- `GET /alerts`
+- `GET /alerts/:id`
+- `POST /alerts/:id/clear`
+- `GET /dashboard-assignments`
+- `POST /dashboard-assignments`
+- `DELETE /dashboard-assignments/:id`
 - `GET /metrics`
 - `GET /health`
 
@@ -201,11 +225,35 @@ Seeded demo users (all use `Admin123!`):
 - ENGINEER: `engineer@demo.local`
 - TECHNICIAN: `technician@demo.local`
 
+## Grafana Dashboards + Assignments
+
+- Dashboard templates map to Grafana dashboard UIDs (ex: `fleet-overview`, `compressor-health`).
+- Supervisors assign templates to fleet or equipment scopes.
+- Engineers and technicians only see dashboards assigned to their supervisor scope.
+- Client admins can review assignments across their tenant.
+- System admins can inspect assignments across all tenants (`GET /system/dashboard-assignments`).
+- Grafana runs with anonymous viewer access for embedding; admin credentials are `admin` / `admin`.
+- Seed data creates templates and assignments for the demo tenant that match the provisioned dashboards.
+
+Query filters available on dashboard assignment endpoints:
+- `equipment_type` (matches template equipment type)
+- `scope` (`FLEET` or `EQUIPMENT`)
+- `q` (search by template or equipment name)
+
+## Role Test Matrix
+
+1. SYSTEM_ADMIN: manage clients, users, dashboard templates, and view assignments.
+2. CLIENT_ADMIN: manage tenant users, sites, equipment, sensors, alerts, and dashboard coverage.
+3. SUPERVISOR: manage team, equipment, sensors, alerts, and assign dashboards.
+4. ENGINEER: view scoped equipment, alerts, and dashboards.
+5. TECHNICIAN: view scoped equipment, alerts, and dashboards.
+
 ## Observability
 
 - Prometheus metrics for ingestion, admin, and alerts
 - Loki + Promtail for centralized logs
 - Grafana pre-configured datasources for Prometheus, InfluxDB, Loki
+ - Grafana dashboard provisioning for embedded templates (see `infra\docker\grafana\provisioning\dashboards`)
 
 ## Testing and Simulation
 
@@ -266,6 +314,7 @@ Recommended migration flow:
 - `PW_JWT_SECRET_KEY`, `PW_JWT_ACCESS_TOKEN_MINUTES`
 - `PW_INTERNAL_API_TOKEN`
 - `PW_CORS_ORIGINS`
+- `VITE_API_URL`, `VITE_GRAFANA_URL`
 
 ## Notes
 

@@ -15,13 +15,24 @@ export default function AppHome() {
     return <Navigate to="/app/client/overview" replace />;
   }
 
+  if (user.role === "SUPERVISOR") {
+    return <Navigate to="/app/supervisor/overview" replace />;
+  }
+
+  if (user.role === "ENGINEER") {
+    return <Navigate to="/app/engineer/overview" replace />;
+  }
+
+  if (user.role === "TECHNICIAN") {
+    return <Navigate to="/app/technician/overview" replace />;
+  }
+
   return (
     <section className="page">
       <div className="page-header">
         <h1>Welcome back, {user.full_name}.</h1>
         <p>
-          This workspace is ready for the next phase. Navigation tiles will
-          activate as modules are implemented.
+          Your workspace is ready. Use the console navigation to monitor assets, alerts, and dashboards.
         </p>
       </div>
 

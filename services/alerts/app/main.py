@@ -49,7 +49,7 @@ class AlertEngine:
         while True:
             try:
                 response = await self.client.get(
-                    f"{settings.admin_api_url}/alerts",
+                    f"{settings.admin_api_url}/internal/alert-rules",
                     headers={"X-Internal-Token": settings.internal_api_token},
                 )
                 response.raise_for_status()

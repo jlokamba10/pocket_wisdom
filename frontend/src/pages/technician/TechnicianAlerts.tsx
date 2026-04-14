@@ -1,0 +1,276 @@
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import Pagination from "../../components/Pagination";
+import StatusBadge from "../../components/StatusBadge";
+import { apiRequest } from "../../lib/api";
+import { formatDateTime } from "../../lib/format";
+import { buildQuery } from "../../lib/query";
+import { useAuth } from "../../state/auth";
+
+type Equipment = { id: number; name: string };
+type Sensor = { id: number; name: string; equipment_id?: number };
+type User = { id: number; full_name: string };
+
+type AlertEvent = {
+  id: number;
+  severity: string;
+  status: string;
+  triggered_at: string;
+  cleared_at: string | null;
+  equipment?: Equipment | null;
+  sensor?: Sensor | null;
+  cleared_by?: User | null;
+};
+
+type PaginatedAlerts = {
+  items: AlertEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+type PaginatedEquipment = { items: Equipment[] };
+type PaginatedSensors = { items: Sensor[] };
+
+const DEFAULT_LIMIT = 12;
+
+export default function TechnicianAlerts() {
+  const { token } = useAuth();
+  const [alerts, setAlerts] = useState<AlertEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("");
+  const [equipmentFilter, setEquipmentFilter] = useState("");
+  const [sensorFilter, setSensorFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [sensors, setSensors] = useState<Sensor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [clearTarget, setClearTarget] = useState<AlertEvent | null>(null);
+  const [clearComment, setClearComment] = useState("");
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
+
+  const alertSensors = useMemo(() => {
+    if (!equipmentFilter) {
+      return sensors;
+    }
+    const eqId = Number(equipmentFilter);
+    return sensors.filter((sensor) => sensor.equipment_id === eqId);
+  }, [equipmentFilter, sensors]);
+
+  useEffect(() => {
+    if (!sensorFilter) {
+      return;
+    }
+    if (!alertSensors.some((sensor) => String(sensor.id) === sensorFilter)) {
+      setSensorFilter("");
+    }
+  }, [alertSensors, sensorFilter]);
+
+  const loadAlerts = async (nextOffset = offset) => {
+    if (!token) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = buildQuery({
+        q: query,
+        status: statusFilter || undefined,
+        severity: severityFilter || undefined,
+        equipment_id: equipmentFilter || undefined,
+        sensor_id: sensorFilter || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        limit: DEFAULT_LIMIT,
+        offset: nextOffset,
+      });
+      const data = await apiRequest<PaginatedAlerts>(`/alerts${params}`, { method: "GET" }, token);
+      setAlerts(data.items);
+      setTotal(data.total);
+      setOffset(data.offset);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load alerts.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAlerts(0);
+  }, [token, query, statusFilter, severityFilter, equipmentFilter, sensorFilter, startDate, endDate]);
+
+  useEffect(() => {
+    const loadEquipment = async () => {
+      if (!token) {
+        return;
+      }
+      try {
+        const data = await apiRequest<PaginatedEquipment>("/equipment?limit=100&offset=0", { method: "GET" }, token);
+        setEquipment(data.items);
+      } catch {
+        setEquipment([]);
+      }
+    };
+    const loadSensors = async () => {
+      if (!token) {
+        return;
+      }
+      try {
+        const data = await apiRequest<PaginatedSensors>("/sensors?limit=100&offset=0", { method: "GET" }, token);
+        setSensors(data.items);
+      } catch {
+        setSensors([]);
+      }
+    };
+    loadEquipment();
+    loadSensors();
+  }, [token]);
+
+  const startClear = (alert: AlertEvent) => {
+    setClearTarget(alert);
+    setClearComment("");
+    setClearMessage(null);
+  };
+
+  const submitClear = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!token || !clearTarget) {
+      return;
+    }
+    if (!window.confirm(`Clear alert ${clearTarget.id}?`)) {
+      return;
+    }
+    try {
+      await apiRequest(`/alerts/${clearTarget.id}/clear`, { method: "POST", body: JSON.stringify({ clear_comment: clearComment || null }) }, token);
+      setClearMessage("Alert cleared.");
+      setClearTarget(null);
+      await loadAlerts(offset);
+    } catch (err) {
+      setClearMessage(err instanceof Error ? err.message : "Failed to clear alert.");
+    }
+  };
+
+  return (
+    <section className="page">
+      <div className="page-header">
+        <h2>Alerts</h2>
+        <p>Review and clear alerts for your assigned equipment.</p>
+      </div>
+
+      <div className="panel">
+        <div className="table-toolbar">
+          <input
+            type="search"
+            placeholder="Search alerts"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <select value={equipmentFilter} onChange={(event) => setEquipmentFilter(event.target.value)}>
+            <option value="">All equipment</option>
+            {equipment.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <select value={sensorFilter} onChange={(event) => setSensorFilter(event.target.value)}>
+            <option value="">All sensors</option>
+            {alertSensors.map((sensor) => (
+              <option key={sensor.id} value={sensor.id}>
+                {sensor.name}
+              </option>
+            ))}
+          </select>
+          <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
+            <option value="">All severity</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">All status</option>
+            <option value="OPEN">OPEN</option>
+            <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+            <option value="CLEARED">CLEARED</option>
+          </select>
+          <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        </div>
+
+        {clearTarget ? (
+          <form className="form-grid" onSubmit={submitClear}>
+            <label className="full">
+              Clear alert #{clearTarget.id} comment
+              <textarea
+                value={clearComment}
+                onChange={(event) => setClearComment(event.target.value)}
+                placeholder="Optional clear comment"
+              />
+            </label>
+            <div className="form-actions">
+              <button className="primary" type="submit">
+                Confirm Clear
+              </button>
+              <button className="ghost" type="button" onClick={() => setClearTarget(null)}>
+                Cancel
+              </button>
+            </div>
+            {clearMessage ? <div className="form-error">{clearMessage}</div> : null}
+          </form>
+        ) : null}
+
+        {loading ? (
+          <div className="table-state">Loading alerts...</div>
+        ) : error ? (
+          <div className="form-error">{error}</div>
+        ) : alerts.length === 0 ? (
+          <div className="empty-state">No alerts found.</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Equipment</th>
+                <th>Sensor</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>Triggered</th>
+                <th>Cleared By</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((alert) => (
+                <tr key={alert.id}>
+                  <td>{alert.equipment?.name ?? "-"}</td>
+                  <td>{alert.sensor?.name ?? "-"}</td>
+                  <td>{alert.severity}</td>
+                  <td>
+                    <StatusBadge status={alert.status} />
+                  </td>
+                  <td>{formatDateTime(alert.triggered_at)}</td>
+                  <td>{alert.cleared_by?.full_name ?? "-"}</td>
+                  <td>
+                    {alert.status !== "CLEARED" ? (
+                      <button className="ghost" type="button" onClick={() => startClear(alert)}>
+                        Clear
+                      </button>
+                    ) : (
+                      <span className="muted">Cleared</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <Pagination total={total} limit={DEFAULT_LIMIT} offset={offset} onPageChange={loadAlerts} />
+      </div>
+    </section>
+  );
+}

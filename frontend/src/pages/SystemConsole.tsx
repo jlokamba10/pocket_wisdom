@@ -5,7 +5,9 @@ const navItems = [
   { label: "Clients", to: "/app/system/clients" },
   { label: "Users", to: "/app/system/users" },
   { label: "Dashboard Templates", to: "/app/system/dashboard-templates" },
+  { label: "Dashboard Assignments", to: "/app/system/dashboard-assignments" },
   { label: "Audit Log", to: "/app/system/audit" },
+  { label: "System Health", to: "/app/system/health" },
 ];
 
 export default function SystemConsole() {

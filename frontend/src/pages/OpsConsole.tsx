@@ -3,11 +3,11 @@ export default function OpsConsole() {
     <section className="page">
       <div className="page-header">
         <h1>Operations Console</h1>
-        <p>Operational dashboards and alerts will land here in phase 2.</p>
+        <p>Monitor live equipment performance and alert queues.</p>
       </div>
       <div className="card">
-        <h3>Coming soon</h3>
-        <p>Live equipment status, alert queues, and sensor diagnostics.</p>
+        <h3>Operations Workspace</h3>
+        <p>Use the role consoles to access dashboards, alerts, and equipment status.</p>
       </div>
     </section>
   );

@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..audit import log_audit
 from ..auth import hash_password
-from ..deps import get_db, require_system_admin
+from ..deps import get_db, require_roles, require_system_admin
 from ..models import (
     AlertEvent,
     AlertStatus,
+    DashboardAssignment,
     DashboardTemplate,
     Equipment,
     ResourceStatus,
@@ -29,6 +30,7 @@ from ..schemas import (
     DashboardTemplateOut,
     DashboardTemplateUpdate,
     PaginatedAuditLogs,
+    PaginatedDashboardAssignments,
     PaginatedDashboardTemplates,
     PaginatedTenants,
     PaginatedUsers,
@@ -248,20 +250,45 @@ def list_users(
     limit: int = Query(default=20, ge=5, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_system_admin),
+    current_user: User = Depends(require_roles(UserRole.SYSTEM_ADMIN.value, UserRole.SUPERVISOR.value)),
 ) -> PaginatedUsers:
-    query = db.query(User).options(joinedload(User.tenant))
-    if q:
-        like = f"%{q.strip().lower()}%"
-        query = query.filter(or_(User.email.ilike(like), User.full_name.ilike(like)))
-    if role:
-        query = query.filter(User.role == role)
-    if tenant_id is not None:
-        query = query.filter(User.tenant_id == tenant_id)
-    if status_filter:
-        query = query.filter(User.status == status_filter)
-    query = query.order_by(User.created_at.desc())
-    total, items = _paginate(query, limit, offset)
+    if current_user.role == UserRole.SUPERVISOR.value:
+        if current_user.tenant_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access required")
+        allowed_roles = {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value}
+        if role and role not in allowed_roles:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not allowed")
+        query = (
+            db.query(User)
+            .options(joinedload(User.tenant))
+            .filter(
+                User.tenant_id == current_user.tenant_id,
+                User.supervisor_user_id == current_user.id,
+                User.role.in_(allowed_roles),
+            )
+        )
+        if q:
+            like = f"%{q.strip().lower()}%"
+            query = query.filter(or_(User.email.ilike(like), User.full_name.ilike(like)))
+        if role:
+            query = query.filter(User.role == role)
+        if status_filter:
+            query = query.filter(User.status == status_filter)
+        query = query.order_by(User.full_name.asc())
+        total, items = _paginate(query, limit, offset)
+    else:
+        query = db.query(User).options(joinedload(User.tenant))
+        if q:
+            like = f"%{q.strip().lower()}%"
+            query = query.filter(or_(User.email.ilike(like), User.full_name.ilike(like)))
+        if role:
+            query = query.filter(User.role == role)
+        if tenant_id is not None:
+            query = query.filter(User.tenant_id == tenant_id)
+        if status_filter:
+            query = query.filter(User.status == status_filter)
+        query = query.order_by(User.created_at.desc())
+        total, items = _paginate(query, limit, offset)
     return PaginatedUsers(
         items=[UserOut.model_validate(user) for user in items],
         total=total,
@@ -274,30 +301,37 @@ def list_users(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_system_admin),
+    current_user: User = Depends(require_roles(UserRole.SYSTEM_ADMIN.value, UserRole.SUPERVISOR.value)),
 ) -> UserCreateResponse:
     role = payload.role
-    if role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
-
-    tenant_id = payload.tenant_id
-    if role == UserRole.SYSTEM_ADMIN.value:
-        tenant_id = None
+    if current_user.role == UserRole.SUPERVISOR.value:
+        if current_user.tenant_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access required")
+        if role not in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not allowed")
+        supervisor_user_id = current_user.id
+        tenant_id = current_user.tenant_id
     else:
-        if tenant_id is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant is required")
-        tenant = db.get(Tenant, tenant_id)
-        if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    if role in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value} and payload.supervisor_user_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor is required")
-    if role == UserRole.SUPERVISOR.value and payload.supervisor_user_id is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisors cannot have supervisors")
-    if payload.supervisor_user_id is not None:
-        supervisor = db.get(User, payload.supervisor_user_id)
-        if not supervisor or supervisor.tenant_id != tenant_id or supervisor.role != UserRole.SUPERVISOR.value:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor assignment invalid")
+        if role not in ALLOWED_ROLES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+        tenant_id = payload.tenant_id
+        if role == UserRole.SYSTEM_ADMIN.value:
+            tenant_id = None
+        else:
+            if tenant_id is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant is required")
+            tenant = db.get(Tenant, tenant_id)
+            if not tenant:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if role in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value} and payload.supervisor_user_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor is required")
+        if role == UserRole.SUPERVISOR.value and payload.supervisor_user_id is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisors cannot have supervisors")
+        if payload.supervisor_user_id is not None:
+            supervisor = db.get(User, payload.supervisor_user_id)
+            if not supervisor or supervisor.tenant_id != tenant_id or supervisor.role != UserRole.SUPERVISOR.value:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor assignment invalid")
+        supervisor_user_id = payload.supervisor_user_id
 
     temp_password = payload.temporary_password or generate_temp_password()
     user = User(
@@ -306,7 +340,7 @@ def create_user(
         role=role,
         status=UserStatus.ACTIVE.value,
         tenant_id=tenant_id,
-        supervisor_user_id=payload.supervisor_user_id,
+        supervisor_user_id=supervisor_user_id,
         password_hash=hash_password(temp_password),
     )
     db.add(user)
@@ -315,9 +349,10 @@ def create_user(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
+    audit_action = "team_member_created" if current_user.role == UserRole.SUPERVISOR.value else "user_created"
     log_audit(
         db,
-        action="user_created",
+        action=audit_action,
         entity_type="user",
         entity_id=user.id,
         tenant_id=user.tenant_id,
@@ -346,52 +381,77 @@ def update_user(
     user_id: int,
     payload: UserAdminUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_system_admin),
+    current_user: User = Depends(require_roles(UserRole.SYSTEM_ADMIN.value, UserRole.SUPERVISOR.value)),
 ) -> UserOut:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if payload.role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
-
-    tenant_id = payload.tenant_id
-    if payload.role == UserRole.SYSTEM_ADMIN.value:
-        tenant_id = None
-    else:
-        if tenant_id is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant is required")
-        tenant = db.get(Tenant, tenant_id)
-        if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    if payload.role in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value} and payload.supervisor_user_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor is required")
-    if payload.role == UserRole.SUPERVISOR.value and payload.supervisor_user_id is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisors cannot have supervisors")
-    if payload.supervisor_user_id is not None:
-        supervisor = db.get(User, payload.supervisor_user_id)
-        if not supervisor or supervisor.tenant_id != tenant_id or supervisor.role != UserRole.SUPERVISOR.value:
+    if current_user.role == UserRole.SUPERVISOR.value:
+        if user.supervisor_user_id != current_user.id or user.role not in {
+            UserRole.ENGINEER.value,
+            UserRole.TECHNICIAN.value,
+        }:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if payload.role not in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role not allowed")
+        if payload.supervisor_user_id not in (None, current_user.id):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor assignment invalid")
 
-    role_changed = payload.role != user.role
-    user.full_name = payload.full_name.strip()
-    user.role = payload.role
-    user.tenant_id = tenant_id
-    user.supervisor_user_id = payload.supervisor_user_id if payload.role in {
-        UserRole.ENGINEER.value,
-        UserRole.TECHNICIAN.value,
-    } else None
-
-    if role_changed:
+        role_changed = payload.role != user.role
+        user.full_name = payload.full_name.strip()
+        user.role = payload.role
+        user.supervisor_user_id = current_user.id
         log_audit(
             db,
-            action="user_role_changed",
+            action="team_member_reassigned",
             entity_type="user",
             entity_id=user.id,
             tenant_id=user.tenant_id,
             user_id=current_user.id,
-            details={"role": user.role},
+            details={"role": user.role, "role_changed": role_changed},
         )
+    else:
+        if payload.role not in ALLOWED_ROLES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+
+        tenant_id = payload.tenant_id
+        if payload.role == UserRole.SYSTEM_ADMIN.value:
+            tenant_id = None
+        else:
+            if tenant_id is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant is required")
+            tenant = db.get(Tenant, tenant_id)
+            if not tenant:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        if payload.role in {UserRole.ENGINEER.value, UserRole.TECHNICIAN.value} and payload.supervisor_user_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor is required")
+        if payload.role == UserRole.SUPERVISOR.value and payload.supervisor_user_id is not None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisors cannot have supervisors")
+        if payload.supervisor_user_id is not None:
+            supervisor = db.get(User, payload.supervisor_user_id)
+            if not supervisor or supervisor.tenant_id != tenant_id or supervisor.role != UserRole.SUPERVISOR.value:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supervisor assignment invalid")
+
+        role_changed = payload.role != user.role
+        user.full_name = payload.full_name.strip()
+        user.role = payload.role
+        user.tenant_id = tenant_id
+        user.supervisor_user_id = payload.supervisor_user_id if payload.role in {
+            UserRole.ENGINEER.value,
+            UserRole.TECHNICIAN.value,
+        } else None
+
+        if role_changed:
+            log_audit(
+                db,
+                action="user_role_changed",
+                entity_type="user",
+                entity_id=user.id,
+                tenant_id=user.tenant_id,
+                user_id=current_user.id,
+                details={"role": user.role},
+            )
     db.commit()
     db.refresh(user)
     return UserOut.model_validate(user)
@@ -401,15 +461,22 @@ def update_user(
 def activate_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_system_admin),
+    current_user: User = Depends(require_roles(UserRole.SYSTEM_ADMIN.value, UserRole.SUPERVISOR.value)),
 ) -> UserOut:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if current_user.role == UserRole.SUPERVISOR.value:
+        if user.supervisor_user_id != current_user.id or user.role not in {
+            UserRole.ENGINEER.value,
+            UserRole.TECHNICIAN.value,
+        }:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.status = UserStatus.ACTIVE.value
+    action = "team_member_activated" if current_user.role == UserRole.SUPERVISOR.value else "user_activated"
     log_audit(
         db,
-        action="user_activated",
+        action=action,
         entity_type="user",
         entity_id=user.id,
         tenant_id=user.tenant_id,
@@ -425,15 +492,22 @@ def activate_user(
 def inactivate_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_system_admin),
+    current_user: User = Depends(require_roles(UserRole.SYSTEM_ADMIN.value, UserRole.SUPERVISOR.value)),
 ) -> UserOut:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if current_user.role == UserRole.SUPERVISOR.value:
+        if user.supervisor_user_id != current_user.id or user.role not in {
+            UserRole.ENGINEER.value,
+            UserRole.TECHNICIAN.value,
+        }:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.status = UserStatus.INACTIVE.value
+    action = "team_member_inactivated" if current_user.role == UserRole.SUPERVISOR.value else "user_inactivated"
     log_audit(
         db,
-        action="user_inactivated",
+        action=action,
         entity_type="user",
         entity_id=user.id,
         tenant_id=user.tenant_id,
@@ -477,20 +551,95 @@ def list_dashboard_templates(
     limit: int = Query(default=20, ge=5, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_system_admin),
+    current_user: User = Depends(
+        require_roles(
+            UserRole.SYSTEM_ADMIN.value,
+            UserRole.CLIENT_ADMIN.value,
+            UserRole.SUPERVISOR.value,
+            UserRole.ENGINEER.value,
+            UserRole.TECHNICIAN.value,
+        )
+    ),
 ) -> PaginatedDashboardTemplates:
     query = db.query(DashboardTemplate)
+    if current_user.role != UserRole.SYSTEM_ADMIN.value:
+        active = True
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(or_(DashboardTemplate.name.ilike(like), DashboardTemplate.code.ilike(like)))
     if equipment_type:
-        query = query.filter(DashboardTemplate.equipment_type == equipment_type)
+        normalized_type = equipment_type.strip().upper()
+        query = query.filter(DashboardTemplate.equipment_type == normalized_type)
     if active is not None:
         query = query.filter(DashboardTemplate.is_active.is_(active))
     query = query.order_by(DashboardTemplate.name.asc())
     total, items = _paginate(query, limit, offset)
     return PaginatedDashboardTemplates(
         items=[DashboardTemplateOut.model_validate(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/system/dashboard-assignments", response_model=PaginatedDashboardAssignments)
+def list_system_dashboard_assignments(
+    q: str | None = None,
+    tenant_id: int | None = None,
+    supervisor_user_id: int | None = None,
+    equipment_id: int | None = None,
+    equipment_type: str | None = None,
+    scope: str | None = None,
+    limit: int = Query(default=20, ge=5, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_system_admin),
+) -> PaginatedDashboardAssignments:
+    query = (
+        db.query(DashboardAssignment)
+        .options(
+            joinedload(DashboardAssignment.template),
+            joinedload(DashboardAssignment.equipment).joinedload(Equipment.site),
+            joinedload(DashboardAssignment.supervisor),
+            joinedload(DashboardAssignment.created_by),
+            joinedload(DashboardAssignment.tenant),
+        )
+        .order_by(DashboardAssignment.id.desc())
+    )
+    if tenant_id is not None:
+        query = query.filter(DashboardAssignment.tenant_id == tenant_id)
+    if supervisor_user_id is not None:
+        query = query.filter(DashboardAssignment.supervisor_user_id == supervisor_user_id)
+    if equipment_id is not None:
+        query = query.filter(DashboardAssignment.equipment_id == equipment_id)
+    if q or equipment_type:
+        query = query.join(DashboardAssignment.template)
+    if q:
+        like = f"%{q.strip()}%"
+        query = (
+            query.outerjoin(DashboardAssignment.equipment)
+            .filter(
+                or_(
+                    DashboardTemplate.name.ilike(like),
+                    DashboardTemplate.code.ilike(like),
+                    Equipment.name.ilike(like),
+                )
+            )
+        )
+    if equipment_type:
+        normalized_type = equipment_type.strip().upper()
+        query = query.filter(DashboardTemplate.equipment_type == normalized_type)
+    if scope:
+        normalized = scope.strip().upper()
+        if normalized == "FLEET":
+            query = query.filter(DashboardAssignment.equipment_id.is_(None))
+        elif normalized == "EQUIPMENT":
+            query = query.filter(DashboardAssignment.equipment_id.is_not(None))
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid scope filter")
+    total, items = _paginate(query, limit, offset)
+    return PaginatedDashboardAssignments(
+        items=[item for item in items],
         total=total,
         limit=limit,
         offset=offset,

@@ -70,6 +70,7 @@ class AlertRuleOut(BaseModel):
     tenant_id: int
     equipment_id: int
     sensor_id: Optional[int]
+    status: str
     severity: str
     metric_name: str
     operator: str
@@ -77,6 +78,32 @@ class AlertRuleOut(BaseModel):
     time_window_minutes: Optional[int]
     webhook_url: Optional[str]
     email: Optional[str]
+
+
+class AlertRuleCreate(BaseModel):
+    equipment_id: int
+    sensor_id: Optional[int] = None
+    severity: str = Field(min_length=2, max_length=16)
+    metric_name: str = Field(min_length=2, max_length=64)
+    operator: str = Field(min_length=1, max_length=8)
+    threshold_value: float
+    time_window_minutes: Optional[int] = Field(default=None, ge=1)
+    status: Optional[str] = None
+    webhook_url: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=128)
+
+
+class AlertRuleUpdate(BaseModel):
+    equipment_id: int
+    sensor_id: Optional[int] = None
+    severity: str = Field(min_length=2, max_length=16)
+    metric_name: str = Field(min_length=2, max_length=64)
+    operator: str = Field(min_length=1, max_length=8)
+    threshold_value: float
+    time_window_minutes: Optional[int] = Field(default=None, ge=1)
+    status: Optional[str] = None
+    webhook_url: Optional[str] = None
+    email: Optional[str] = Field(default=None, max_length=128)
 
 
 class TenantOut(BaseModel):
@@ -340,10 +367,12 @@ class DashboardAssignmentOut(BaseModel):
     equipment_id: Optional[int]
     dashboard_template_id: int
     created_by_user_id: int
+    created_at: datetime
     template: DashboardTemplateOut
     equipment: Optional[EquipmentOut] = None
     supervisor: Optional[UserSummary] = None
     created_by: Optional[UserSummary] = None
+    tenant: Optional[TenantSummary] = None
 
 
 class PaginatedDashboardAssignments(BaseModel):
@@ -351,6 +380,11 @@ class PaginatedDashboardAssignments(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class DashboardAssignmentCreate(BaseModel):
+    dashboard_template_id: int
+    equipment_id: Optional[int] = None
 
 
 class AlertEventOut(BaseModel):
@@ -372,8 +406,19 @@ class AlertEventOut(BaseModel):
     cleared_by: Optional[UserSummary] = None
 
 
+class AlertClearRequest(BaseModel):
+    clear_comment: Optional[str] = Field(default=None, max_length=512)
+
+
 class PaginatedAlertEvents(BaseModel):
     items: list[AlertEventOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class PaginatedAlertRules(BaseModel):
+    items: list[AlertRuleOut]
     total: int
     limit: int
     offset: int

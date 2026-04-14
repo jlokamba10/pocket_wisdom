@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardEmbed from "../../components/DashboardEmbed";
-import MetricCard from "../../components/MetricCard";
 import Pagination from "../../components/Pagination";
 import TableToolbar from "../../components/TableToolbar";
 import { apiRequest } from "../../lib/api";
@@ -38,7 +37,7 @@ type PaginatedAssignments = {
 
 const DEFAULT_LIMIT = 10;
 
-export default function ClientDashboards() {
+export default function EngineerDashboards() {
   const { token } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [total, setTotal] = useState(0);
@@ -64,7 +63,7 @@ export default function ClientDashboards() {
         limit: DEFAULT_LIMIT,
         offset: nextOffset,
       });
-      const data = await apiRequest<PaginatedAssignments>(`/client/dashboards${params}`, { method: "GET" }, token);
+      const data = await apiRequest<PaginatedAssignments>(`/dashboard-assignments${params}`, { method: "GET" }, token);
       setAssignments(data.items);
       setTotal(data.total);
       setOffset(data.offset);
@@ -93,22 +92,11 @@ export default function ClientDashboards() {
     [assignments, selectedId]
   );
 
-  const fleetCount = assignments.filter((assignment) => !assignment.equipment).length;
-  const equipmentCount = assignments.length - fleetCount;
-  const templateCount = new Set(assignments.map((assignment) => assignment.template.id)).size;
-
   return (
     <section className="page">
       <div className="page-header">
         <h2>Dashboards</h2>
-        <p>Current dashboard assignments for your tenant.</p>
-      </div>
-
-      <div className="card-grid">
-        <MetricCard title="Total Assignments" value={total} helper="Across tenant" />
-        <MetricCard title="Fleet Dashboards" value={fleetCount} helper="In view" />
-        <MetricCard title="Equipment Dashboards" value={equipmentCount} helper="In view" />
-        <MetricCard title="Templates" value={templateCount} helper="In view" />
+        <p>Dashboards assigned to your supervisor scope.</p>
       </div>
 
       <div className="panel">
@@ -137,9 +125,7 @@ export default function ClientDashboards() {
         ) : error ? (
           <div className="form-error">{error}</div>
         ) : assignments.length === 0 ? (
-          <div className="empty-state">
-            No dashboards assigned yet. Ask a supervisor to assign templates to fleet or equipment.
-          </div>
+          <div className="empty-state">No dashboards assigned yet.</div>
         ) : (
           <div className="dashboard-layout">
             <div className="dashboard-list">
@@ -159,7 +145,6 @@ export default function ClientDashboards() {
                   <div className="dashboard-card-meta">Scope: {assignment.equipment?.name ?? "Fleet"}</div>
                   <div className="dashboard-card-meta">Assigned {formatDateTime(assignment.created_at)}</div>
                   <div className="dashboard-card-meta">Assigned by {assignment.created_by?.full_name ?? "-"}</div>
-                  <div className="dashboard-card-meta">Supervisor: {assignment.supervisor?.full_name ?? "Tenant"}</div>
                 </button>
               ))}
             </div>

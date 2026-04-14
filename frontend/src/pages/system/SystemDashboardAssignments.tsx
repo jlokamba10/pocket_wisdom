@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import DashboardEmbed from "../../components/DashboardEmbed";
-import MetricCard from "../../components/MetricCard";
 import Pagination from "../../components/Pagination";
 import TableToolbar from "../../components/TableToolbar";
 import { apiRequest } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import { buildQuery } from "../../lib/query";
 import { useAuth } from "../../state/auth";
+
+type TenantSummary = {
+  id: number;
+  name: string;
+  code: string;
+};
 
 type DashboardTemplate = {
   id: number;
@@ -27,6 +32,7 @@ type Assignment = {
   equipment: Equipment;
   supervisor: User;
   created_by: User;
+  tenant?: TenantSummary | null;
 };
 
 type PaginatedAssignments = {
@@ -36,19 +42,37 @@ type PaginatedAssignments = {
   offset: number;
 };
 
+type PaginatedTenants = {
+  items: TenantSummary[];
+};
+
 const DEFAULT_LIMIT = 10;
 
-export default function ClientDashboards() {
+export default function SystemDashboardAssignments() {
   const { token } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [query, setQuery] = useState("");
+  const [tenantFilter, setTenantFilter] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const loadTenants = async () => {
+    if (!token) {
+      return;
+    }
+    try {
+      const data = await apiRequest<PaginatedTenants>("/clients?limit=100&offset=0", { method: "GET" }, token);
+      setTenants(data.items);
+    } catch {
+      setTenants([]);
+    }
+  };
 
   const loadAssignments = async (nextOffset = offset) => {
     if (!token) {
@@ -59,25 +83,30 @@ export default function ClientDashboards() {
     try {
       const params = buildQuery({
         q: query,
+        tenant_id: tenantFilter ? Number(tenantFilter) : undefined,
         equipment_type: equipmentFilter || undefined,
         scope: scopeFilter || undefined,
         limit: DEFAULT_LIMIT,
         offset: nextOffset,
       });
-      const data = await apiRequest<PaginatedAssignments>(`/client/dashboards${params}`, { method: "GET" }, token);
+      const data = await apiRequest<PaginatedAssignments>(`/system/dashboard-assignments${params}`, { method: "GET" }, token);
       setAssignments(data.items);
       setTotal(data.total);
       setOffset(data.offset);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load dashboards.");
+      setError(err instanceof Error ? err.message : "Unable to load dashboard assignments.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    loadTenants();
+  }, [token]);
+
+  useEffect(() => {
     loadAssignments(0);
-  }, [token, query, equipmentFilter, scopeFilter]);
+  }, [token, query, tenantFilter, equipmentFilter, scopeFilter]);
 
   useEffect(() => {
     if (assignments.length > 0 && !assignments.find((assignment) => assignment.id === selectedId)) {
@@ -93,32 +122,29 @@ export default function ClientDashboards() {
     [assignments, selectedId]
   );
 
-  const fleetCount = assignments.filter((assignment) => !assignment.equipment).length;
-  const equipmentCount = assignments.length - fleetCount;
-  const templateCount = new Set(assignments.map((assignment) => assignment.template.id)).size;
-
   return (
     <section className="page">
       <div className="page-header">
-        <h2>Dashboards</h2>
-        <p>Current dashboard assignments for your tenant.</p>
-      </div>
-
-      <div className="card-grid">
-        <MetricCard title="Total Assignments" value={total} helper="Across tenant" />
-        <MetricCard title="Fleet Dashboards" value={fleetCount} helper="In view" />
-        <MetricCard title="Equipment Dashboards" value={equipmentCount} helper="In view" />
-        <MetricCard title="Templates" value={templateCount} helper="In view" />
+        <h2>Dashboard Assignments</h2>
+        <p>Inspect dashboard coverage across tenants and operational scopes.</p>
       </div>
 
       <div className="panel">
         <TableToolbar>
           <input
             type="search"
-            placeholder="Search dashboards"
+            placeholder="Search assignments"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
+          <select value={tenantFilter} onChange={(event) => setTenantFilter(event.target.value)}>
+            <option value="">All tenants</option>
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name}
+              </option>
+            ))}
+          </select>
           <input
             type="text"
             placeholder="Equipment type"
@@ -137,52 +163,68 @@ export default function ClientDashboards() {
         ) : error ? (
           <div className="form-error">{error}</div>
         ) : assignments.length === 0 ? (
-          <div className="empty-state">
-            No dashboards assigned yet. Ask a supervisor to assign templates to fleet or equipment.
-          </div>
+          <div className="empty-state">No dashboard assignments found.</div>
         ) : (
-          <div className="dashboard-layout">
-            <div className="dashboard-list">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Template</th>
+                <th>Tenant</th>
+                <th>Scope</th>
+                <th>Supervisor</th>
+                <th>Created By</th>
+                <th>Assigned</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {assignments.map((assignment) => (
-                <button
-                  key={assignment.id}
-                  className={`dashboard-card${selectedId === assignment.id ? " active" : ""}`}
-                  type="button"
-                  onClick={() => setSelectedId(assignment.id)}
-                >
-                  <div className="dashboard-card-header">
-                    <div className="dashboard-card-title">{assignment.template.name}</div>
+                <tr key={assignment.id}>
+                  <td>
+                    {assignment.template.name}
                     {assignment.template.equipment_type ? (
                       <span className="chip">{assignment.template.equipment_type}</span>
                     ) : null}
-                  </div>
-                  <div className="dashboard-card-meta">Scope: {assignment.equipment?.name ?? "Fleet"}</div>
-                  <div className="dashboard-card-meta">Assigned {formatDateTime(assignment.created_at)}</div>
-                  <div className="dashboard-card-meta">Assigned by {assignment.created_by?.full_name ?? "-"}</div>
-                  <div className="dashboard-card-meta">Supervisor: {assignment.supervisor?.full_name ?? "Tenant"}</div>
-                </button>
+                  </td>
+                  <td>{assignment.tenant?.name ?? `Tenant ${assignment.tenant_id}`}</td>
+                  <td>{assignment.equipment?.name ?? "Fleet"}</td>
+                  <td>{assignment.supervisor?.full_name ?? "-"}</td>
+                  <td>{assignment.created_by?.full_name ?? "-"}</td>
+                  <td>{formatDateTime(assignment.created_at)}</td>
+                  <td>
+                    <button className="ghost" type="button" onClick={() => setSelectedId(assignment.id)}>
+                      View
+                    </button>
+                  </td>
+                </tr>
               ))}
-            </div>
-            <div>
-              {selectedAssignment ? (
-                <DashboardEmbed
-                  uid={selectedAssignment.template.grafana_uid}
-                  title={selectedAssignment.template.name}
-                  description={`Scope: ${selectedAssignment.equipment?.name ?? "Fleet"}`}
-                  variables={{
-                    tenant_id: selectedAssignment.tenant_id,
-                    site_id: selectedAssignment.equipment?.site_id,
-                    equipment_id: selectedAssignment.equipment?.id,
-                  }}
-                />
-              ) : (
-                <div className="empty-state">Select a dashboard to preview.</div>
-              )}
-            </div>
-          </div>
+            </tbody>
+          </table>
         )}
 
         <Pagination total={total} limit={DEFAULT_LIMIT} offset={offset} onPageChange={loadAssignments} />
+      </div>
+
+      <div className="panel">
+        {selectedAssignment ? (
+          <DashboardEmbed
+            uid={selectedAssignment.template.grafana_uid}
+            title={selectedAssignment.template.name}
+            description={
+              <>
+                Scope: {selectedAssignment.equipment?.name ?? "Fleet"} • Tenant:{" "}
+                {selectedAssignment.tenant?.name ?? selectedAssignment.tenant_id}
+              </>
+            }
+            variables={{
+              tenant_id: selectedAssignment.tenant_id,
+              site_id: selectedAssignment.equipment?.site_id,
+              equipment_id: selectedAssignment.equipment?.id,
+            }}
+          />
+        ) : (
+          <div className="empty-state">Select an assignment to preview the embedded dashboard.</div>
+        )}
       </div>
     </section>
   );

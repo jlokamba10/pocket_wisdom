@@ -12,32 +12,24 @@ const navItems: NavItem[] = [
   { label: "System Console", to: "/app/system/overview", roles: ["SYSTEM_ADMIN"] },
   { label: "Client Console", to: "/app/client/overview", roles: ["CLIENT_ADMIN"] },
   {
-    label: "Operations Console",
-    to: "/app/ops",
-    roles: ["SUPERVISOR", "ENGINEER", "TECHNICIAN"],
+    label: "Supervisor Console",
+    to: "/app/supervisor/overview",
+    roles: ["SUPERVISOR"],
+  },
+  {
+    label: "Engineer Console",
+    to: "/app/engineer/overview",
+    roles: ["ENGINEER"],
+  },
+  {
+    label: "Technician Console",
+    to: "/app/technician/overview",
+    roles: ["TECHNICIAN"],
   },
   {
     label: "Profile",
     to: "/app/profile",
     roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR", "ENGINEER", "TECHNICIAN"],
-  },
-];
-
-const placeholderItems: NavItem[] = [
-  {
-    label: "Work Orders (phase 3)",
-    roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR", "ENGINEER", "TECHNICIAN"],
-    disabled: true,
-  },
-  {
-    label: "Reliability Playbooks (phase 3)",
-    roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR", "ENGINEER", "TECHNICIAN"],
-    disabled: true,
-  },
-  {
-    label: "Asset Strategy (phase 3)",
-    roles: ["SYSTEM_ADMIN", "CLIENT_ADMIN", "SUPERVISOR"],
-    disabled: true,
   },
 ];
 
@@ -48,8 +40,6 @@ export default function AppShell() {
   }
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
-  const visiblePlaceholders = placeholderItems.filter((item) => item.roles.includes(user.role));
-
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -81,15 +71,6 @@ export default function AppShell() {
               </NavLink>
             ) : null
           )}
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-section-title">Coming Next</div>
-          {visiblePlaceholders.map((item) => (
-            <div key={item.label} className="nav-item disabled" aria-disabled="true">
-              {item.label}
-            </div>
-          ))}
         </div>
       </aside>
 

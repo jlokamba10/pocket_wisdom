@@ -4,7 +4,23 @@ import AppHome from "./pages/AppHome";
 import ClientConsole from "./pages/ClientConsole";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import OpsConsole from "./pages/OpsConsole";
+import SupervisorConsole from "./pages/supervisor/SupervisorConsole";
+import SupervisorOverview from "./pages/supervisor/SupervisorOverview";
+import SupervisorTeam from "./pages/supervisor/SupervisorTeam";
+import SupervisorEquipment from "./pages/supervisor/SupervisorEquipment";
+import SupervisorSensors from "./pages/supervisor/SupervisorSensors";
+import SupervisorAlerts from "./pages/supervisor/SupervisorAlerts";
+import SupervisorDashboardTemplates from "./pages/supervisor/SupervisorDashboardTemplates";
+import EngineerConsole from "./pages/engineer/EngineerConsole";
+import EngineerOverview from "./pages/engineer/EngineerOverview";
+import EngineerEquipment from "./pages/engineer/EngineerEquipment";
+import EngineerAlerts from "./pages/engineer/EngineerAlerts";
+import EngineerDashboards from "./pages/engineer/EngineerDashboards";
+import TechnicianConsole from "./pages/technician/TechnicianConsole";
+import TechnicianOverview from "./pages/technician/TechnicianOverview";
+import TechnicianEquipment from "./pages/technician/TechnicianEquipment";
+import TechnicianAlerts from "./pages/technician/TechnicianAlerts";
+import TechnicianDashboards from "./pages/technician/TechnicianDashboards";
 import ProfilePage from "./pages/ProfilePage";
 import SystemConsole from "./pages/SystemConsole";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
@@ -16,6 +32,8 @@ import SystemClientDetail from "./pages/system/SystemClientDetail";
 import SystemUsers from "./pages/system/SystemUsers";
 import SystemTemplates from "./pages/system/SystemTemplates";
 import SystemAudit from "./pages/system/SystemAudit";
+import SystemDashboardAssignments from "./pages/system/SystemDashboardAssignments";
+import SystemHealth from "./pages/system/SystemHealth";
 import ClientOverview from "./pages/client/ClientOverview";
 import ClientUsers from "./pages/client/ClientUsers";
 import ClientSites from "./pages/client/ClientSites";
@@ -54,7 +72,9 @@ export default function App() {
           <Route path="clients/:id" element={<SystemClientDetail />} />
           <Route path="users" element={<SystemUsers />} />
           <Route path="dashboard-templates" element={<SystemTemplates />} />
+          <Route path="dashboard-assignments" element={<SystemDashboardAssignments />} />
           <Route path="audit" element={<SystemAudit />} />
+          <Route path="health" element={<SystemHealth />} />
         </Route>
         <Route
           path="client"
@@ -74,13 +94,49 @@ export default function App() {
           <Route path="dashboards" element={<ClientDashboards />} />
         </Route>
         <Route
-          path="ops"
+          path="supervisor"
           element={
-            <RequireRole allowed={["SUPERVISOR", "ENGINEER", "TECHNICIAN"]}>
-              <OpsConsole />
+            <RequireRole allowed={["SUPERVISOR"]}>
+              <SupervisorConsole />
             </RequireRole>
           }
-        />
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<SupervisorOverview />} />
+          <Route path="team" element={<SupervisorTeam />} />
+          <Route path="equipment" element={<SupervisorEquipment />} />
+          <Route path="sensors" element={<SupervisorSensors />} />
+          <Route path="alerts" element={<SupervisorAlerts />} />
+          <Route path="dashboard-templates" element={<SupervisorDashboardTemplates />} />
+        </Route>
+        <Route
+          path="engineer"
+          element={
+            <RequireRole allowed={["ENGINEER"]}>
+              <EngineerConsole />
+            </RequireRole>
+          }
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<EngineerOverview />} />
+          <Route path="equipment" element={<EngineerEquipment />} />
+          <Route path="alerts" element={<EngineerAlerts />} />
+          <Route path="dashboards" element={<EngineerDashboards />} />
+        </Route>
+        <Route
+          path="technician"
+          element={
+            <RequireRole allowed={["TECHNICIAN"]}>
+              <TechnicianConsole />
+            </RequireRole>
+          }
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<TechnicianOverview />} />
+          <Route path="equipment" element={<TechnicianEquipment />} />
+          <Route path="alerts" element={<TechnicianAlerts />} />
+          <Route path="dashboards" element={<TechnicianDashboards />} />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

@@ -1,6 +1,8 @@
 ﻿import { FormEvent, useEffect, useState } from "react";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import Pagination from "../../components/Pagination";
 import StatusBadge from "../../components/StatusBadge";
+import TableToolbar from "../../components/TableToolbar";
 import { apiRequest } from "../../lib/api";
 import { buildQuery } from "../../lib/query";
 import { useAuth } from "../../state/auth";
@@ -43,6 +45,10 @@ export default function SystemTemplates() {
   const [equipmentType, setEquipmentType] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    template: DashboardTemplate;
+    action: "activate" | "inactivate";
+  } | null>(null);
 
   const loadTemplates = async (nextOffset = offset) => {
     if (!token) {
@@ -125,15 +131,17 @@ export default function SystemTemplates() {
     }
   };
 
-  const toggleStatus = async (template: DashboardTemplate) => {
-    if (!token) {
-      return;
-    }
+  const requestToggle = (template: DashboardTemplate) => {
     const action = template.is_active ? "inactivate" : "activate";
-    if (!window.confirm(`Are you sure you want to ${action} ${template.name}?`)) {
+    setConfirmAction({ template, action });
+  };
+
+  const confirmToggle = async () => {
+    if (!token || !confirmAction) {
       return;
     }
-    await apiRequest(`/dashboard-templates/${template.id}/${action}`, { method: "POST" }, token);
+    await apiRequest(`/dashboard-templates/${confirmAction.template.id}/${confirmAction.action}`, { method: "POST" }, token);
+    setConfirmAction(null);
     await loadTemplates(offset);
   };
 
@@ -145,7 +153,7 @@ export default function SystemTemplates() {
       </div>
 
       <div className="panel">
-        <div className="table-toolbar">
+        <TableToolbar>
           <input
             type="search"
             placeholder="Search templates"
@@ -156,7 +164,7 @@ export default function SystemTemplates() {
             type="text"
             placeholder="Equipment type"
             value={equipmentFilter}
-            onChange={(event) => setEquipmentFilter(event.target.value)}
+            onChange={(event) => setEquipmentFilter(event.target.value.toUpperCase())}
           />
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">All status</option>
@@ -173,7 +181,7 @@ export default function SystemTemplates() {
           >
             {showForm ? "Close" : "New Template"}
           </button>
-        </div>
+        </TableToolbar>
 
         {showForm ? (
           <form className="form-grid" onSubmit={onSubmit}>
@@ -244,7 +252,7 @@ export default function SystemTemplates() {
                       <button className="ghost" type="button" onClick={() => startEdit(template)}>
                         Edit
                       </button>
-                      <button className="ghost" type="button" onClick={() => toggleStatus(template)}>
+                      <button className="ghost" type="button" onClick={() => requestToggle(template)}>
                         {template.is_active ? "Inactivate" : "Activate"}
                       </button>
                     </div>
@@ -257,6 +265,20 @@ export default function SystemTemplates() {
 
         <Pagination total={total} limit={DEFAULT_LIMIT} offset={offset} onPageChange={loadTemplates} />
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={
+          confirmAction
+            ? `${confirmAction.action === "activate" ? "Activate" : "Inactivate"} ${confirmAction.template.name}?`
+            : "Confirm change"
+        }
+        description="This will update availability for all tenants."
+        confirmLabel={confirmAction?.action === "activate" ? "Activate Template" : "Inactivate Template"}
+        tone={confirmAction?.action === "inactivate" ? "danger" : "default"}
+        onConfirm={confirmToggle}
+        onClose={() => setConfirmAction(null)}
+      />
     </section>
   );
 }

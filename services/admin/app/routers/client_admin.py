@@ -757,6 +757,8 @@ def list_alerts(
 @router.get("/dashboards", response_model=PaginatedDashboardAssignments)
 def list_dashboard_assignments(
     q: str | None = None,
+    equipment_type: str | None = None,
+    scope: str | None = None,
     tenant_id: int | None = None,
     limit: int = Query(default=20, ge=5, le=100),
     offset: int = Query(default=0, ge=0),
@@ -768,26 +770,36 @@ def list_dashboard_assignments(
         db.query(DashboardAssignment)
         .options(
             joinedload(DashboardAssignment.template),
-            joinedload(DashboardAssignment.equipment),
+            joinedload(DashboardAssignment.equipment).joinedload(Equipment.site),
             joinedload(DashboardAssignment.supervisor),
             joinedload(DashboardAssignment.created_by),
+            joinedload(DashboardAssignment.tenant),
         )
         .filter(DashboardAssignment.tenant_id == tenant_id)
         .order_by(DashboardAssignment.id.desc())
     )
+    if q or equipment_type:
+        query = query.join(DashboardAssignment.template)
     if q:
         like = f"%{q.strip()}%"
-        query = (
-            query.join(DashboardAssignment.template)
-            .outerjoin(DashboardAssignment.equipment)
-            .filter(
-                or_(
-                    DashboardTemplate.name.ilike(like),
-                    DashboardTemplate.code.ilike(like),
-                    Equipment.name.ilike(like),
-                )
+        query = query.outerjoin(DashboardAssignment.equipment).filter(
+            or_(
+                DashboardTemplate.name.ilike(like),
+                DashboardTemplate.code.ilike(like),
+                Equipment.name.ilike(like),
             )
         )
+    if equipment_type:
+        normalized_type = equipment_type.strip().upper()
+        query = query.filter(DashboardTemplate.equipment_type == normalized_type)
+    if scope:
+        normalized = scope.strip().upper()
+        if normalized == "FLEET":
+            query = query.filter(DashboardAssignment.equipment_id.is_(None))
+        elif normalized == "EQUIPMENT":
+            query = query.filter(DashboardAssignment.equipment_id.is_not(None))
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid scope filter")
     total, items = _paginate(query, limit, offset)
     return PaginatedDashboardAssignments(
         items=[item for item in items],

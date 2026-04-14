@@ -44,6 +44,17 @@ a {
   box-shadow: 0 12px 20px rgba(15, 23, 42, 0.2);
 }
 
+.danger {
+  background: linear-gradient(135deg, #b42318, #f76c6c);
+  color: #fff;
+  border: none;
+  padding: 0.8rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 12px 20px rgba(180, 35, 24, 0.2);
+}
+
 .primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -299,6 +310,17 @@ a {
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
+.card-link {
+  display: block;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
 .panel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -405,6 +427,45 @@ a {
   grid-column: 1 / -1;
 }
 
+.form-panel {
+  margin-top: 1rem;
+  padding: 1.2rem;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+}
+
+.form-rows {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.form-rows input,
+.form-rows select,
+.form-rows textarea {
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.form-rows textarea {
+  resize: vertical;
+}
+
 .form-actions {
   display: flex;
   gap: 0.8rem;
@@ -445,6 +506,10 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+.dashboard-card .table-actions {
+  justify-content: flex-start;
 }
 
 .table-state {
@@ -584,6 +649,150 @@ a {
   }
 }
 
+.metric-card {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.metric-title {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.metric-helper {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.dashboard-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.dashboard-card {
+  text-align: left;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.4rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  width: 100%;
+  font-family: inherit;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.dashboard-card:focus,
+.dashboard-card:focus-visible {
+  outline: 2px solid rgba(47, 128, 237, 0.6);
+  outline-offset: 2px;
+}
+
+.dashboard-card.active {
+  border-color: rgba(47, 128, 237, 0.5);
+  box-shadow: 0 10px 26px rgba(47, 128, 237, 0.2);
+}
+
+.dashboard-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.dashboard-card-title {
+  font-weight: 600;
+}
+
+.dashboard-card-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.dashboard-embed {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-embed-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dashboard-frame {
+  background: #0f172a;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  min-height: 420px;
+}
+
+.dashboard-frame iframe {
+  width: 100%;
+  height: 560px;
+  border: 0;
+  display: block;
+  background: #0f172a;
+}
+
+.dashboard-embed-empty {
+  border: 1px dashed rgba(15, 23, 42, 0.2);
+  border-radius: 18px;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 50;
+}
+
+.confirm-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 20px;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.2rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
@@ -602,5 +811,17 @@ a {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-frame iframe {
+    height: 420px;
   }
 }

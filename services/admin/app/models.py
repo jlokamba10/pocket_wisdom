@@ -173,6 +173,7 @@ class DashboardAssignment(Base):
     equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=True, index=True)
     dashboard_template_id = Column(Integer, ForeignKey("dashboard_templates.id"), nullable=False, index=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="dashboards")
     equipment = relationship("Equipment", back_populates="dashboards")

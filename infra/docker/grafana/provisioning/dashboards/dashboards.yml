@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: PocketWisdom
+    orgId: 1
+    folder: PocketWisdom
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
