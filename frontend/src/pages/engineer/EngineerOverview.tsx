@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import AttentionPanel from "../../components/AttentionPanel";
 import { apiRequest } from "../../lib/api";
 import { useAuth } from "../../state/auth";
 
@@ -74,6 +75,34 @@ export default function EngineerOverview() {
           <p className="metric">{summary.alerts_cleared_yesterday}</p>
         </div>
       </div>
+
+      <AttentionPanel
+        title="Attention Now"
+        subtitle="Work through urgent operational tasks first."
+        items={[
+          {
+            label: "Open alerts",
+            value: summary.counts.open_alerts,
+            hint: "Acknowledge and clear active incidents",
+            to: "/app/engineer/alerts",
+            tone: summary.counts.open_alerts > 0 ? "danger" : "neutral",
+          },
+          {
+            label: "Active sensors",
+            value: summary.counts.active_sensors,
+            hint: "Validate thresholds and unusual readings",
+            to: "/app/engineer/equipment",
+            tone: summary.counts.active_sensors === 0 ? "warning" : "info",
+          },
+          {
+            label: "Dashboards in scope",
+            value: summary.counts.dashboard_assignments,
+            hint: "Keep visual diagnostics current",
+            to: "/app/engineer/dashboards",
+            tone: summary.counts.dashboard_assignments === 0 ? "warning" : "neutral",
+          },
+        ]}
+      />
     </section>
   );
 }

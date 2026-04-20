@@ -1,4 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { NavLink } from "react-router-dom";
+import AttentionPanel from "../../components/AttentionPanel";
+import MetricCard from "../../components/MetricCard";
 import { apiRequest } from "../../lib/api";
 import { formatDate } from "../../lib/format";
 import { useAuth } from "../../state/auth";
@@ -74,19 +77,48 @@ export default function ClientOverview() {
       </div>
 
       <div className="card-grid">
-        <div className="card">
-          <h3>Active Sensors</h3>
-          <p className="metric">{summary.counts.active_sensors}</p>
-        </div>
-        <div className="card">
-          <h3>Active Equipment</h3>
-          <p className="metric">{summary.counts.active_equipment}</p>
-        </div>
-        <div className="card">
-          <h3>Alerts Yesterday</h3>
-          <p className="metric">{summary.counts.alerts_triggered_yesterday}</p>
-        </div>
+        <NavLink className="card-link" to="/app/client/sensors">
+          <MetricCard title="Active Sensors" value={summary.counts.active_sensors} helper="Online telemetry points" />
+        </NavLink>
+        <NavLink className="card-link" to="/app/client/equipment">
+          <MetricCard title="Active Equipment" value={summary.counts.active_equipment} helper="Operational assets" />
+        </NavLink>
+        <NavLink className="card-link" to="/app/client/alerts">
+          <MetricCard
+            title="Alerts Yesterday"
+            value={summary.counts.alerts_triggered_yesterday}
+            helper="Triggered in last 24 hours"
+          />
+        </NavLink>
       </div>
+
+      <AttentionPanel
+        title="Attention Now"
+        subtitle="Prioritize these actions to keep your tenant healthy."
+        items={[
+          {
+            label: "Triggered alerts (yesterday)",
+            value: summary.counts.alerts_triggered_yesterday,
+            hint: "Investigate unresolved conditions first",
+            to: "/app/client/alerts",
+            tone: summary.counts.alerts_triggered_yesterday > 0 ? "danger" : "neutral",
+          },
+          {
+            label: "Active equipment",
+            value: summary.counts.active_equipment,
+            hint: "Check assets without sensor coverage",
+            to: "/app/client/equipment",
+            tone: summary.counts.active_equipment === 0 ? "warning" : "info",
+          },
+          {
+            label: "Active sensors",
+            value: summary.counts.active_sensors,
+            hint: "Validate telemetry and stale streams",
+            to: "/app/client/sensors",
+            tone: summary.counts.active_sensors === 0 ? "warning" : "info",
+          },
+        ]}
+      />
 
       <div className="panel-grid">
         <div className="panel">
@@ -157,17 +189,18 @@ export default function ClientOverview() {
       <div className="panel-grid">
         <div className="panel">
           <h3>Yesterday's Alerts</h3>
-          <p>Total triggered: {summary.alerts_yesterday.total}</p>
+          <p className="muted">Total triggered: {summary.alerts_yesterday.total}</p>
           {summary.alerts_yesterday.cleared_by.length === 0 ? (
             <div className="empty-state">No alerts cleared yet.</div>
           ) : (
-            <ul>
+            <div className="list-stack">
               {summary.alerts_yesterday.cleared_by.map((item) => (
-                <li key={item.user_id}>
-                  {item.name}: {item.count}
-                </li>
+                <div key={item.user_id} className="list-row">
+                  <span>{item.name}</span>
+                  <strong>{item.count}</strong>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
 
@@ -176,13 +209,19 @@ export default function ClientOverview() {
           {summary.recent_user_activity.length === 0 ? (
             <div className="empty-state">No recent user activity.</div>
           ) : (
-            <ul>
+            <div className="list-stack">
               {summary.recent_user_activity.map((entry) => (
-                <li key={entry.id}>
-                  {entry.action} ({entry.entity_type}) — {entry.user ?? "System"} ({formatDate(entry.created_at)})
-                </li>
+                <div key={entry.id} className="list-row">
+                  <span>
+                    {entry.action} ({entry.entity_type}
+                    {entry.entity_id ? ` ${entry.entity_id}` : ""})
+                  </span>
+                  <span className="muted">
+                    {entry.user ?? "System"} - {formatDate(entry.created_at)}
+                  </span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>
@@ -192,13 +231,14 @@ export default function ClientOverview() {
         {summary.recent_equipment_additions.length === 0 ? (
           <div className="empty-state">No equipment additions logged yet.</div>
         ) : (
-          <ul>
+          <div className="list-stack">
             {summary.recent_equipment_additions.map((entry) => (
-              <li key={entry.id}>
-                {entry.details?.name ? String(entry.details.name) : "Equipment"} — {formatDate(entry.created_at)}
-              </li>
+              <div key={entry.id} className="list-row">
+                <span>{entry.details?.name ? String(entry.details.name) : "Equipment"}</span>
+                <span className="muted">{formatDate(entry.created_at)}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </section>

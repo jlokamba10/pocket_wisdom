@@ -101,6 +101,9 @@ export default function EngineerAlerts() {
   const [clearTarget, setClearTarget] = useState<AlertEvent | null>(null);
   const [clearComment, setClearComment] = useState("");
   const [clearMessage, setClearMessage] = useState<string | null>(null);
+  const [selectedAlertIds, setSelectedAlertIds] = useState<number[]>([]);
+  const [bulkClearComment, setBulkClearComment] = useState("");
+  const [alertActionMessage, setAlertActionMessage] = useState<string | null>(null);
 
   const loadEquipment = async () => {
     if (!token) {
@@ -269,6 +272,12 @@ export default function EngineerAlerts() {
     }
   }, [alertSensors, sensorFilter]);
 
+  useEffect(() => {
+    setSelectedAlertIds((previous) =>
+      previous.filter((id) => alerts.some((alert) => alert.id === id && alert.status !== "CLEARED"))
+    );
+  }, [alerts]);
+
   const onRuleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!token) {
@@ -324,6 +333,61 @@ export default function EngineerAlerts() {
       await loadAlerts(alertOffset);
     } catch (err) {
       setClearMessage(err instanceof Error ? err.message : "Failed to clear alert.");
+    }
+  };
+
+  const selectableAlertIds = alerts.filter((alert) => alert.status !== "CLEARED").map((alert) => alert.id);
+  const allSelectableChecked =
+    selectableAlertIds.length > 0 && selectableAlertIds.every((id) => selectedAlertIds.includes(id));
+
+  const toggleAlertSelection = (alertId: number) => {
+    setSelectedAlertIds((current) =>
+      current.includes(alertId) ? current.filter((id) => id !== alertId) : [...current, alertId]
+    );
+  };
+
+  const toggleSelectAllAlerts = () => {
+    setSelectedAlertIds(allSelectableChecked ? [] : selectableAlertIds);
+  };
+
+  const acknowledgeAlert = async (alert: AlertEvent) => {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiRequest(`/alerts/${alert.id}/acknowledge`, { method: "POST" }, token);
+      setAlertActionMessage(`Alert #${alert.id} acknowledged.`);
+      await loadAlerts(alertOffset);
+    } catch (err) {
+      setAlertActionMessage(err instanceof Error ? err.message : "Failed to acknowledge alert.");
+    }
+  };
+
+  const clearSelectedAlerts = async () => {
+    if (!token || selectedAlertIds.length === 0) {
+      return;
+    }
+    if (!window.confirm(`Clear ${selectedAlertIds.length} selected alerts?`)) {
+      return;
+    }
+    try {
+      const response = await apiRequest<{ message: string }>(
+        "/alerts/actions/clear-bulk",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            alert_ids: selectedAlertIds,
+            clear_comment: bulkClearComment || null,
+          }),
+        },
+        token
+      );
+      setAlertActionMessage(response.message);
+      setSelectedAlertIds([]);
+      setBulkClearComment("");
+      await loadAlerts(alertOffset);
+    } catch (err) {
+      setAlertActionMessage(err instanceof Error ? err.message : "Failed to clear selected alerts.");
     }
   };
 
@@ -581,6 +645,26 @@ export default function EngineerAlerts() {
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
         </div>
 
+        {selectedAlertIds.length > 0 ? (
+          <div className="bulk-toolbar">
+            <span className="bulk-count">{selectedAlertIds.length} selected</span>
+            <input
+              type="text"
+              placeholder="Optional clear comment for selected"
+              value={bulkClearComment}
+              onChange={(event) => setBulkClearComment(event.target.value)}
+            />
+            <button className="primary" type="button" onClick={clearSelectedAlerts}>
+              Clear Selected
+            </button>
+            <button className="ghost" type="button" onClick={() => setSelectedAlertIds([])}>
+              Reset Selection
+            </button>
+          </div>
+        ) : null}
+
+        {alertActionMessage ? <div className="form-success">{alertActionMessage}</div> : null}
+
         {clearTarget ? (
           <form className="form-grid" onSubmit={submitClear}>
             <label className="full">
@@ -599,20 +683,36 @@ export default function EngineerAlerts() {
                 Cancel
               </button>
             </div>
-            {clearMessage ? <div className="form-error">{clearMessage}</div> : null}
+            {clearMessage ? <div className="form-success">{clearMessage}</div> : null}
           </form>
         ) : null}
 
         {alertLoading ? (
           <div className="table-state">Loading alerts...</div>
         ) : alertError ? (
-          <div className="form-error">{alertError}</div>
+          <div className="form-error">
+            {alertError}
+            <div className="table-actions">
+              <button className="ghost" type="button" onClick={() => loadAlerts(alertOffset)}>
+                Retry
+              </button>
+            </div>
+          </div>
         ) : alerts.length === 0 ? (
-          <div className="empty-state">No alerts found.</div>
+          <div className="empty-state">No alerts found. Adjust filters or date range to broaden results.</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    className="table-check"
+                    checked={allSelectableChecked}
+                    onChange={toggleSelectAllAlerts}
+                    aria-label="Select all open alerts"
+                  />
+                </th>
                 <th>Equipment</th>
                 <th>Sensor</th>
                 <th>Severity</th>
@@ -625,6 +725,17 @@ export default function EngineerAlerts() {
             <tbody>
               {alerts.map((alert) => (
                 <tr key={alert.id}>
+                  <td>
+                    {alert.status !== "CLEARED" ? (
+                      <input
+                        type="checkbox"
+                        className="table-check"
+                        checked={selectedAlertIds.includes(alert.id)}
+                        onChange={() => toggleAlertSelection(alert.id)}
+                        aria-label={`Select alert ${alert.id}`}
+                      />
+                    ) : null}
+                  </td>
                   <td>{alert.equipment?.name ?? "-"}</td>
                   <td>{alert.sensor?.name ?? "-"}</td>
                   <td>{alert.severity}</td>
@@ -634,13 +745,20 @@ export default function EngineerAlerts() {
                   <td>{formatDateTime(alert.triggered_at)}</td>
                   <td>{alert.cleared_by?.full_name ?? "-"}</td>
                   <td>
-                    {alert.status !== "CLEARED" ? (
-                      <button className="ghost" type="button" onClick={() => startClear(alert)}>
-                        Clear
-                      </button>
-                    ) : (
-                      <span className="muted">Cleared</span>
-                    )}
+                    <div className="table-actions">
+                      {alert.status === "OPEN" ? (
+                        <button className="ghost" type="button" onClick={() => acknowledgeAlert(alert)}>
+                          Acknowledge
+                        </button>
+                      ) : null}
+                      {alert.status !== "CLEARED" ? (
+                        <button className="ghost" type="button" onClick={() => startClear(alert)}>
+                          Clear
+                        </button>
+                      ) : (
+                        <span className="muted">Cleared</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

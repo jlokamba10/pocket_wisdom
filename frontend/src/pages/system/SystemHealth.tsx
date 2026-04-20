@@ -99,7 +99,7 @@ export default function SystemHealth() {
             <p className="muted">http://localhost:8080</p>
           </div>
         </div>
-        <p className="muted" style={{ marginTop: "1rem" }}>
+        <p className="muted section-note">
           Last checked: {lastChecked ? formatDateTime(lastChecked) : "Pending"}
         </p>
       </div>

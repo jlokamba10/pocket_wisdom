@@ -2,6 +2,8 @@
 import { apiRequest } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import StatusBadge from "../../components/StatusBadge";
+import AttentionPanel from "../../components/AttentionPanel";
+import MetricCard from "../../components/MetricCard";
 import { useAuth } from "../../state/auth";
 
 type TenantSummary = {
@@ -115,39 +117,46 @@ export default function SystemOverview() {
       </div>
 
       <div className="card-grid">
-        <div className="card">
-          <h3>Active Clients</h3>
-          <p className="metric">{summary.counts.active_clients}</p>
-        </div>
-        <div className="card">
-          <h3>Inactive Clients</h3>
-          <p className="metric">{summary.counts.inactive_clients}</p>
-        </div>
-        <div className="card">
-          <h3>Online Sensors</h3>
-          <p className="metric">{summary.counts.total_online_sensors}</p>
-        </div>
-        <div className="card">
-          <h3>Total Equipment</h3>
-          <p className="metric">{summary.counts.total_equipment}</p>
-        </div>
-        <div className="card">
-          <h3>Open Alerts</h3>
-          <p className="metric">{summary.counts.total_open_alerts}</p>
-        </div>
+        <MetricCard title="Active Clients" value={summary.counts.active_clients} helper="Tenant accounts in service" />
+        <MetricCard title="Inactive Clients" value={summary.counts.inactive_clients} helper="Currently not in service" />
+        <MetricCard title="Online Sensors" value={summary.counts.total_online_sensors} helper="Connected telemetry points" />
+        <MetricCard title="Total Equipment" value={summary.counts.total_equipment} helper="Tracked assets platform-wide" />
+        <MetricCard title="Open Alerts" value={summary.counts.total_open_alerts} helper="Awaiting acknowledgment or clearance" />
       </div>
+
+      <AttentionPanel
+        title="Attention Now"
+        subtitle="Immediate checks to keep platform operations stable."
+        items={[
+          {
+            label: "Open platform alerts",
+            value: summary.counts.total_open_alerts,
+            hint: "Review critical events across tenants",
+            to: "/app/system/overview",
+            tone: summary.counts.total_open_alerts > 0 ? "danger" : "neutral",
+          },
+          {
+            label: "Inactive clients",
+            value: summary.counts.inactive_clients,
+            hint: "Potential onboarding or billing follow-up",
+            to: "/app/system/clients",
+            tone: summary.counts.inactive_clients > 0 ? "warning" : "neutral",
+          },
+          {
+            label: "Dashboard assignment coverage",
+            value: summary.breakdown_by_client.length,
+            hint: "Tenants reporting in this overview",
+            to: "/app/system/dashboard-assignments",
+            tone: "info",
+          },
+        ]}
+      />
 
       <div className="panel">
         <h3>Platform Usage</h3>
         <div className="card-grid compact">
-          <div className="card">
-            <h4>Total Users</h4>
-            <p className="metric">{summary.platform_usage.total_users}</p>
-          </div>
-          <div className="card">
-            <h4>Active Users</h4>
-            <p className="metric">{summary.platform_usage.active_users}</p>
-          </div>
+          <MetricCard title="Total Users" value={summary.platform_usage.total_users} helper="All user accounts" />
+          <MetricCard title="Active Users" value={summary.platform_usage.active_users} helper="Enabled and operational" />
           <div className="card">
             <h4>Roles</h4>
             <div className="chip-row">
@@ -208,33 +217,42 @@ export default function SystemOverview() {
             {summary.recent_onboarding.clients.length === 0 ? (
               <div className="empty-state">No recent clients.</div>
             ) : (
-              <ul>
+              <div className="list-stack">
                 {summary.recent_onboarding.clients.map((client) => (
-                  <li key={client.id}>
-                    <div className="list-row">
-                      <span>{client.name}</span>
-                      <span className="muted">{formatDateTime(client.created_at)}</span>
+                  <div key={client.id} className="list-row">
+                    <div className="list-item">
+                      <span className="list-item-title">{client.name}</span>
+                      <span className="list-item-meta">Code: {client.code}</span>
                     </div>
-                  </li>
+                    <div className="list-item align-end">
+                      <StatusBadge status={client.status} />
+                      <span className="list-item-meta">{formatDateTime(client.created_at)}</span>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
             <h4>Users</h4>
             {summary.recent_onboarding.users.length === 0 ? (
               <div className="empty-state">No recent users.</div>
             ) : (
-              <ul>
+              <div className="list-stack">
                 {summary.recent_onboarding.users.map((user) => (
-                  <li key={user.id}>
-                    <div className="list-row">
-                      <span>
-                        {user.full_name} ({user.role})
+                  <div key={user.id} className="list-row">
+                    <div className="list-item">
+                      <span className="list-item-title">{user.full_name}</span>
+                      <span className="list-item-meta">
+                        {user.role}
+                        {user.tenant?.name ? ` - ${user.tenant.name}` : ""}
                       </span>
-                      <span className="muted">{formatDateTime(user.created_at)}</span>
                     </div>
-                  </li>
+                    <div className="list-item align-end">
+                      <StatusBadge status={user.status} />
+                      <span className="list-item-meta">{formatDateTime(user.created_at)}</span>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         </div>

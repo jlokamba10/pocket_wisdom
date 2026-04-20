@@ -4,6 +4,7 @@ import { apiRequest } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import { useAuth } from "../../state/auth";
 import StatusBadge from "../../components/StatusBadge";
+import AttentionPanel from "../../components/AttentionPanel";
 
 type ClearedSeries = { date: string; count: number };
 
@@ -87,6 +88,34 @@ export default function SupervisorOverview() {
           <p className="metric">{summary.alerts_cleared_yesterday}</p>
         </div>
       </div>
+
+      <AttentionPanel
+        title="Attention Now"
+        subtitle="Focus your team on the highest-impact operational issues."
+        items={[
+          {
+            label: "Open alerts in scope",
+            value: summary.counts.open_alerts,
+            hint: "Triage and assign to engineers/technicians",
+            to: "/app/supervisor/alerts",
+            tone: summary.counts.open_alerts > 0 ? "danger" : "neutral",
+          },
+          {
+            label: "Dashboard assignments",
+            value: summary.counts.dashboard_assignments,
+            hint: "Ensure every major asset has a dashboard",
+            to: "/app/supervisor/dashboard-templates",
+            tone: summary.counts.dashboard_assignments === 0 ? "warning" : "info",
+          },
+          {
+            label: "Team members in scope",
+            value: summary.counts.team_members,
+            hint: "Review workload and coverage",
+            to: "/app/supervisor/team",
+            tone: summary.counts.team_members === 0 ? "warning" : "neutral",
+          },
+        ]}
+      />
 
       <div className="panel-grid">
         <div className="panel">

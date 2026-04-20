@@ -23,6 +23,7 @@ from ..models import (
     UserRole,
 )
 from ..schemas import (
+    AlertBulkClearRequest,
     AlertClearRequest,
     AlertEventOut,
     AlertRuleCreate,
@@ -882,6 +883,103 @@ def clear_alert(
     db.commit()
     db.refresh(alert)
     return AlertEventOut.model_validate(alert)
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=AlertEventOut)
+def acknowledge_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_roles(UserRole.SUPERVISOR.value, UserRole.ENGINEER.value, UserRole.TECHNICIAN.value)
+    ),
+) -> AlertEventOut:
+    tenant_id = _require_tenant(current_user)
+    supervisor_id = _resolve_supervisor_scope(current_user)
+    alert = (
+        db.query(AlertEvent)
+        .options(joinedload(AlertEvent.equipment), joinedload(AlertEvent.sensor), joinedload(AlertEvent.cleared_by))
+        .join(Equipment, AlertEvent.equipment_id == Equipment.id)
+        .filter(
+            AlertEvent.id == alert_id,
+            AlertEvent.tenant_id == tenant_id,
+            Equipment.supervisor_user_id == supervisor_id,
+        )
+        .first()
+    )
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    if alert.status == AlertStatus.CLEARED.value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cleared alert cannot be acknowledged")
+    if alert.status == AlertStatus.ACKNOWLEDGED.value:
+        return AlertEventOut.model_validate(alert)
+
+    alert.status = AlertStatus.ACKNOWLEDGED.value
+    alert.cleared_by_user_id = current_user.id
+    log_audit(
+        db,
+        action="alert_acknowledged",
+        entity_type="alert_event",
+        entity_id=alert.id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        details={"status": alert.status},
+    )
+    db.commit()
+    db.refresh(alert)
+    return AlertEventOut.model_validate(alert)
+
+
+@router.post("/alerts/actions/clear-bulk", response_model=MessageOut)
+def clear_alerts_bulk(
+    payload: AlertBulkClearRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_roles(UserRole.SUPERVISOR.value, UserRole.ENGINEER.value, UserRole.TECHNICIAN.value)
+    ),
+) -> MessageOut:
+    tenant_id = _require_tenant(current_user)
+    supervisor_id = _resolve_supervisor_scope(current_user)
+    alert_ids = list(dict.fromkeys(payload.alert_ids))
+    if not alert_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No alerts selected")
+
+    alerts = (
+        db.query(AlertEvent)
+        .join(Equipment, AlertEvent.equipment_id == Equipment.id)
+        .filter(
+            AlertEvent.id.in_(alert_ids),
+            AlertEvent.tenant_id == tenant_id,
+            Equipment.supervisor_user_id == supervisor_id,
+        )
+        .all()
+    )
+    alert_by_id = {alert.id: alert for alert in alerts}
+    cleared_count = 0
+
+    for alert_id in alert_ids:
+        alert = alert_by_id.get(alert_id)
+        if not alert or alert.status == AlertStatus.CLEARED.value:
+            continue
+        alert.status = AlertStatus.CLEARED.value
+        alert.cleared_at = datetime.now(timezone.utc)
+        alert.cleared_by_user_id = current_user.id
+        alert.clear_comment = payload.clear_comment
+        cleared_count += 1
+        log_audit(
+            db,
+            action="alert_cleared_bulk",
+            entity_type="alert_event",
+            entity_id=alert.id,
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            details={"status": alert.status, "comment": payload.clear_comment},
+        )
+
+    db.commit()
+    return MessageOut(
+        status="ok",
+        message=f"Cleared {cleared_count} of {len(alert_ids)} selected alerts.",
+    )
 
 
 @router.get("/dashboard-assignments", response_model=PaginatedDashboardAssignments)

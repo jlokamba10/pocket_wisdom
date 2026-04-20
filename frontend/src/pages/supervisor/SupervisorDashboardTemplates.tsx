@@ -17,11 +17,18 @@ type DashboardTemplate = {
   equipment_type: string | null;
 };
 
+type TenantSummary = {
+  id: number;
+  code: string;
+  name: string;
+};
+
 type Equipment = {
   id: number;
   name: string;
   equipment_type: string;
   site_id?: number | null;
+  serial_number?: string | null;
   status?: string;
   site?: { id: number; name: string } | null;
 };
@@ -36,6 +43,7 @@ type Assignment = {
   equipment: Equipment | null;
   supervisor: User;
   created_by: User;
+  tenant?: TenantSummary | null;
 };
 
 type PaginatedAssignments = {
@@ -159,6 +167,7 @@ export default function SupervisorDashboardTemplates() {
     : equipment;
 
   const selectedAssignment = assignments.find((assignment) => assignment.id === selectedId) ?? null;
+  const tenantTag = (selectedAssignment?.tenant?.code ?? user?.tenant?.code ?? "").toLowerCase();
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -373,6 +382,7 @@ export default function SupervisorDashboardTemplates() {
                     tenant_id: selectedAssignment.tenant_id,
                     site_id: selectedAssignment.equipment?.site_id,
                     equipment_id: selectedAssignment.equipment?.id,
+                    tenant_tag: tenantTag,
                   }}
                 />
               ) : (

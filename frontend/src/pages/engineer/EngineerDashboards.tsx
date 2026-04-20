@@ -14,7 +14,13 @@ type DashboardTemplate = {
   grafana_uid: string | null;
 };
 
-type Equipment = { id: number; name: string; site_id?: number | null } | null;
+type TenantSummary = {
+  id: number;
+  code: string;
+  name: string;
+};
+
+type Equipment = { id: number; name: string; site_id?: number | null; serial_number?: string | null } | null;
 
 type User = { id: number; full_name: string } | null;
 
@@ -26,6 +32,7 @@ type Assignment = {
   equipment: Equipment;
   supervisor: User;
   created_by: User;
+  tenant?: TenantSummary | null;
 };
 
 type PaginatedAssignments = {
@@ -38,7 +45,7 @@ type PaginatedAssignments = {
 const DEFAULT_LIMIT = 10;
 
 export default function EngineerDashboards() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -91,6 +98,7 @@ export default function EngineerDashboards() {
     () => assignments.find((assignment) => assignment.id === selectedId) ?? null,
     [assignments, selectedId]
   );
+  const tenantTag = (selectedAssignment?.tenant?.code ?? user?.tenant?.code ?? "").toLowerCase();
 
   return (
     <section className="page">
@@ -158,6 +166,7 @@ export default function EngineerDashboards() {
                     tenant_id: selectedAssignment.tenant_id,
                     site_id: selectedAssignment.equipment?.site_id,
                     equipment_id: selectedAssignment.equipment?.id,
+                    tenant_tag: tenantTag,
                   }}
                 />
               ) : (

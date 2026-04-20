@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import AttentionPanel from "../../components/AttentionPanel";
 import { apiRequest } from "../../lib/api";
 import { useAuth } from "../../state/auth";
 
@@ -63,6 +64,27 @@ export default function TechnicianOverview() {
           <p className="metric">View</p>
         </NavLink>
       </div>
+
+      <AttentionPanel
+        title="Attention Now"
+        subtitle="Keep field operations focused and responsive."
+        items={[
+          {
+            label: "Open alerts",
+            value: summary.counts.open_alerts,
+            hint: "Acknowledge and clear on-site issues quickly",
+            to: "/app/technician/alerts",
+            tone: summary.counts.open_alerts > 0 ? "danger" : "neutral",
+          },
+          {
+            label: "Equipment in scope",
+            value: summary.counts.equipment,
+            hint: "Prioritize assets with repeated incidents",
+            to: "/app/technician/equipment",
+            tone: summary.counts.equipment === 0 ? "warning" : "info",
+          },
+        ]}
+      />
     </section>
   );
 }

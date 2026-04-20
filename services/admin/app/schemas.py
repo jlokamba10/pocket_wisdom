@@ -410,6 +410,11 @@ class AlertClearRequest(BaseModel):
     clear_comment: Optional[str] = Field(default=None, max_length=512)
 
 
+class AlertBulkClearRequest(BaseModel):
+    alert_ids: list[int] = Field(min_length=1, max_length=100)
+    clear_comment: Optional[str] = Field(default=None, max_length=512)
+
+
 class PaginatedAlertEvents(BaseModel):
     items: list[AlertEventOut]
     total: int

@@ -49,7 +49,7 @@ type PaginatedTenants = {
 const DEFAULT_LIMIT = 10;
 
 export default function SystemDashboardAssignments() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -121,6 +121,7 @@ export default function SystemDashboardAssignments() {
     () => assignments.find((assignment) => assignment.id === selectedId) ?? null,
     [assignments, selectedId]
   );
+  const tenantTag = (selectedAssignment?.tenant?.code ?? user?.tenant?.code ?? "").toLowerCase();
 
   return (
     <section className="page">
@@ -220,6 +221,7 @@ export default function SystemDashboardAssignments() {
               tenant_id: selectedAssignment.tenant_id,
               site_id: selectedAssignment.equipment?.site_id,
               equipment_id: selectedAssignment.equipment?.id,
+              tenant_tag: tenantTag,
             }}
           />
         ) : (
